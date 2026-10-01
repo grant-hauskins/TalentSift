@@ -1,0 +1,10 @@
+# Normalize text files to LF in the repository; Git picks the right line endings for each checkout.
+* text=auto
+
+# Binary files must never have their line endings converted. Git for Windows converts by default,
+# which corrupts the sample PDFs (they contain no NUL bytes, so Git would treat them as text).
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.db binary

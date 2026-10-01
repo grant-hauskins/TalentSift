@@ -10,14 +10,34 @@ Built as the MVP for a Systems Analysis & Design course project. Fictional data 
 
 ## Quick start (local, offline, about 2 minutes)
 
+Needs Python 3.11 or newer (`python --version`).
+
+**macOS / Linux**
+
 ```bash
-python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env                                    # leave the key empty to run offline
-pytest                                                  # ~190 tests, all offline
-python scripts/seed_demo.py --screen                    # 2 roles, 20 fictional resumes, 2 screening runs
+cp .env.example .env                    # leave the key empty to run offline
+pytest                                  # ~220 tests, all offline
+python scripts/seed_demo.py --screen    # 2 roles, 20 fictional resumes, 2 screening runs
 streamlit run app.py
 ```
+
+**Windows (Command Prompt)**
+
+```bat
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+pytest
+python scripts\seed_demo.py --screen
+streamlit run app.py
+```
+
+In PowerShell, activate with `.venv\Scripts\Activate.ps1` instead. If PowerShell refuses to run scripts, run
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
 
 No API key? The app uses the deterministic **offline fake client**. It is also the demo backup: switch to it in
 the sidebar if the network fails mid-presentation.
