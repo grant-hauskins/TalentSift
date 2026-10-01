@@ -32,6 +32,10 @@ the sidebar if the network fails mid-presentation.
 | **Results** | Tabs for Shortlist, Not shortlisted, Auto-rejected, Needs review. Evidence quotes, must-have checklist, reasons, overrides, one-click reinstatement (reason required), confirm-mode approval. |
 | **Audit** | Filter the append-only log, read raw prompts and replies, export CSV, run the consistency and name-swap fairness checks. |
 
+| Proxy flag before approval | Name-swap fairness check |
+|---|---|
+| ![Roles page warning that "Recent graduate preferred" may act as a proxy for age](docs/screenshots/roles_proxy_flag.png) | ![Audit page showing the name-swap test passing](docs/screenshots/audit_name_swap.png) |
+
 ## How decisions are made
 
 1. **Mask first.** Names, emails, phones, addresses and ZIP codes, URLs and handles, and image content are removed
