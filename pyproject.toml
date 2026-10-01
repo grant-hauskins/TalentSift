@@ -1,0 +1,13 @@
+[project]
+name = "talentsift"
+version = "0.1.0"
+description = "Employer-side AI resume screening with an auditable, reversible shortlist (course MVP)."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+filterwarnings = [
+    "ignore::DeprecationWarning:pdfminer.*",
+]

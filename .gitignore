@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- TalentSift ---------------------------------------------------------------
+# Real applicant data never goes in the repo. Only the fictional samples are committed.
+data/*
+!data/resumes/
+data/resumes/*
+!data/resumes/samples/
+!data/samples/
+*.db-wal
+*.db-shm
