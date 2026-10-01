@@ -76,6 +76,7 @@ class Settings:
 
     # --- Storage and demo --------------------------------------------------------------------
     database_url: str = f"sqlite:///{DATA_DIR / 'talentsift.db'}"
+    upload_dir: Path = DATA_DIR / "resumes" / "uploads"  # copies of uploaded files (gitignored)
     prompts_dir: Path = PROJECT_ROOT / "prompts"
     auto_seed_demo: bool = False  # load sample roles and resumes when the database is empty
 
@@ -120,6 +121,7 @@ class Settings:
             max_resume_chars=_as_int(env.get("MAX_RESUME_CHARS"), defaults.max_resume_chars),
             mask_grad_years=_as_bool(env.get("MASK_GRAD_YEARS"), defaults.mask_grad_years),
             database_url=_absolute_sqlite_url(env.get("DATABASE_URL", "").strip() or defaults.database_url),
+            upload_dir=Path(env.get("UPLOAD_DIR", "").strip() or defaults.upload_dir),
             prompts_dir=Path(env.get("PROMPTS_DIR", "").strip() or defaults.prompts_dir),
             auto_seed_demo=_as_bool(env.get("AUTO_SEED_DEMO"), defaults.auto_seed_demo),
         )
