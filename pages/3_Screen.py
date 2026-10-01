@@ -8,7 +8,7 @@ from talentsift import ui
 from talentsift.ingest import list_batches
 from talentsift.models import SCREENABLE_PARSE_STATUSES, Applicant, Role, ScreeningRun
 from talentsift.roles import list_roles
-from talentsift.scoring import ScreeningError, run_screening
+from talentsift.scoring import ScreeningError, recover_stale_runs, run_screening
 
 settings = ui.page_setup(
     "Screen",
@@ -17,6 +17,7 @@ settings = ui.page_setup(
 )
 
 with ui.db_session() as session:
+    recover_stale_runs(session)
     roles = list_roles(session)
     approved = [r for r in roles if r.is_approved]
     drafts = [r for r in roles if not r.is_approved]
@@ -54,6 +55,10 @@ with ui.db_session() as session:
         )
 
     force = st.checkbox("Force re-score (ignore cached results and call the AI again)")
+    st.caption(
+        "Keep this page open while the run works. Clicking another control or page stops the run: results so far "
+        "are kept, the rest go to Needs review, and running again reuses everything already scored."
+    )
     provider_note = ui.PROVIDER_LABELS[ui.selected_provider()]
     run_clicked = st.button(
         f"Run screening · {len(applicants)} applicant(s) · {provider_note}",
@@ -94,6 +99,8 @@ with ui.db_session() as session:
                 st.session_state.run_id = run.id
                 if run.status == "completed":
                     st.success(f"Run {run.id} completed.")
+                elif run.status == "interrupted":
+                    st.warning(f"Run {run.id} was interrupted: {run.status_message}")
                 else:
                     st.error(f"Run {run.id} {run.status.replace('_', ' ')}: {run.status_message}")
                 st.page_link("pages/4_Results.py", label="Open the results", icon="🏆")

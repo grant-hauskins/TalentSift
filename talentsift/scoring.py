@@ -15,21 +15,31 @@ rules and are tested with hand-calculated examples.
 from __future__ import annotations
 
 import json
+import re
 import threading
 import unicodedata
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
+from datetime import timezone
 from typing import Callable, Iterator, Sequence
 
 from sqlmodel import Session, select
 
 from talentsift.audit import log_event, log_llm_attempts, sha256_text
 from talentsift.config import Settings
-from talentsift.llm.base import LLMClient, ValidatedCall, call_with_validation, extract_json_object, schema_name
+from talentsift.llm.base import (
+    LLMClient,
+    ValidatedCall,
+    call_with_validation,
+    extract_json_object,
+    schema_name,
+    strict_json_schema,
+)
 from talentsift.models import (
     PARSE_PARTIAL,
     RUN_COMPLETED,
     RUN_FAILED,
+    RUN_INTERRUPTED,
     RUN_RUNNING,
     RUN_STOPPED_COST_CAP,
     SCREENABLE_PARSE_STATUSES,
@@ -39,6 +49,7 @@ from talentsift.models import (
     STATUS_PENDING_AUTO_REJECT,
     STATUS_SHORTLISTED,
     Applicant,
+    AuditEvent,
     Criterion,
     CriterionScore,
     Evaluation,
@@ -122,12 +133,15 @@ def normalize_for_match(text: str) -> str:
 
 
 def verify_quote(quote: str, normalized_source: str) -> bool:
-    """True if the quote appears in the (already normalized) masked resume text.
+    """True if the quote appears in the (already normalized) masked resume text as whole words.
 
     Wrapping quotation marks and edge punctuation are ignored; the words themselves must match exactly.
+    Whole words matter: "Excel" must not be "verified" by "Excellent", nor "SQL" by "NoSQL".
     """
     needle = normalize_for_match(quote).strip(" \"'.,;:!?")
-    return len(needle) >= 3 and needle in normalized_source
+    if len(needle) < 3:
+        return False
+    return re.search(rf"(?<!\w){re.escape(needle)}(?!\w)", normalized_source) is not None
 
 
 @dataclass
@@ -249,9 +263,18 @@ class _Budget:
     def __init__(self, cap_usd: float):
         self.cap_usd = cap_usd
         self.spent = 0.0
-        self.stop_kind = ""  # "", "cost_cap", or "fatal"
+        self.stop_kind = ""  # "", "cost_cap", "fatal", or "interrupted"
         self.stop_message = ""
+        self.discarded_calls = 0  # finished after an interruption: logged as discarded, not used
+        self.discarded_cost = 0.0
+        self.inflight_calls = 0  # still running at the interruption: outcome unknown, not logged
         self._lock = threading.Lock()
+
+    def halt(self, kind: str, message: str) -> None:
+        """Stop new calls from starting (keeps the first reason if one is already set)."""
+        with self._lock:
+            if not self.stop_kind:
+                self.stop_kind, self.stop_message = kind, message
 
     def try_start(self) -> bool:
         with self._lock:
@@ -277,9 +300,23 @@ def criteria_prompt_json(criteria: Sequence[Criterion]) -> str:
     return json.dumps(rows, indent=1, ensure_ascii=False)
 
 
+_SCHEMA_DIGEST = sha256_text(json.dumps(strict_json_schema(ScreeningOutput), sort_keys=True))[:16]
+
+
 def cache_key_for(resume_text: str, role: Role, rubric_digest: str, prompt: PromptTemplate, model: str) -> str:
-    """hash(masked text + role version + prompt version + model), see docs/decisions.md D-012."""
-    parts = [resume_text, f"role={role.id}", f"version={role.version}", f"rubric={rubric_digest}", f"prompt={prompt.cache_id}", f"model={model}"]
+    """hash(masked text + role version + prompt version + model), see docs/decisions.md D-012.
+
+    The reply schema is sent to the model too, so editing it in schemas.py also invalidates the cache.
+    """
+    parts = [
+        resume_text,
+        f"role={role.id}",
+        f"version={role.version}",
+        f"rubric={rubric_digest}",
+        f"prompt={prompt.cache_id}",
+        f"schema={_SCHEMA_DIGEST}",
+        f"model={model}",
+    ]
     return sha256_text("\n␞".join(parts))
 
 
@@ -395,12 +432,15 @@ def iter_scored(
             _find_cached(session, job, expected_ids)
         jobs.append(job)
 
-    with ThreadPoolExecutor(max_workers=settings.llm_concurrency) as pool:
-        futures: dict[int, Future] = {
-            index: pool.submit(_call_worker, job, client, prompt.system, budget, expected_ids)
-            for index, job in enumerate(jobs)
-            if job is not None and job.cached is None
-        }
+    pool = ThreadPoolExecutor(max_workers=settings.llm_concurrency)
+    futures: dict[int, Future] = {
+        index: pool.submit(_call_worker, job, client, prompt.system, budget, expected_ids)
+        for index, job in enumerate(jobs)
+        if job is not None and job.cached is None
+    }
+    consumed: set[int] = set()
+    finished = False
+    try:
         for index, (applicant, job) in enumerate(zip(applicants, jobs)):
             scored = ScoredApplicant(applicant=applicant)
             label = {"display_label": applicant.display_label, **context}
@@ -431,6 +471,7 @@ def iter_scored(
                 _apply_output(scored, job, job.cached_output, criteria, settings)
             else:
                 call: ValidatedCall | None = futures[index].result()
+                consumed.add(index)
                 if call is None:
                     scored.flags[FLAG_NOT_SCORED] = f"Not scored: {budget.stop_message}"
                 else:
@@ -471,6 +512,47 @@ def iter_scored(
                     )
             session.commit()
             yield scored
+        finished = True
+    finally:
+        if not finished:
+            _discard_unused_calls(session, futures, consumed, jobs, budget, prompt, client, role, run_id, context)
+        pool.shutdown(wait=finished, cancel_futures=not finished)
+
+
+def _discard_unused_calls(session, futures, consumed, jobs, budget, prompt, client, role, run_id, context) -> None:
+    """After an interruption: start no new AI calls and do not wait for calls in flight.
+
+    Calls that already finished but were never used are still written to the audit log (marked
+    "discarded"), because they cost money. Calls still running are only counted.
+    """
+    budget.halt("interrupted", "The run was interrupted before this applicant was scored.")
+    try:
+        for index, future in futures.items():
+            if index in consumed or future.cancelled():
+                continue
+            if future.running():
+                budget.inflight_calls += 1
+                continue
+            if future.exception() is not None or future.result() is None:
+                continue
+            call, applicant = future.result(), jobs[index].applicant
+            budget.discarded_calls += 1
+            budget.discarded_cost += call.total_cost
+            log_llm_attempts(
+                session,
+                call.attempts,
+                schema_name=schema_name(ScreeningOutput),
+                prompt_version=prompt.version,
+                model_requested=client.model,
+                run_id=run_id,
+                role_id=role.id,
+                applicant_id=applicant.id,
+                context={"display_label": applicant.display_label, "discarded": True, **(context or {})},
+                log_validation_failure=False,
+            )
+        session.commit()
+    except Exception:  # never let bookkeeping hide the original interruption
+        session.rollback()
 
 
 # --- Reasons -----------------------------------------------------------------------------------------------
@@ -760,20 +842,20 @@ def run_screening(
     session.commit()
 
     budget = _Budget(settings.cost_cap_usd)
+    results: list[tuple[ScoredApplicant, Evaluation]] = []
+    scored_iter = iter_scored(
+        session,
+        role=role,
+        criteria=criteria,
+        applicants=applicants,
+        client=client,
+        settings=settings,
+        prompt=prompt,
+        use_cache=not force_rescore,
+        run_id=run.id,
+        budget=budget,
+    )
     try:
-        results: list[tuple[ScoredApplicant, Evaluation]] = []
-        scored_iter = iter_scored(
-            session,
-            role=role,
-            criteria=criteria,
-            applicants=applicants,
-            client=client,
-            settings=settings,
-            prompt=prompt,
-            use_cache=not force_rescore,
-            run_id=run.id,
-            budget=budget,
-        )
         for done, scored in enumerate(scored_iter, start=1):
             evaluation = _save_evaluation(session, run, scored)
             run.total_tokens += scored.tokens
@@ -785,47 +867,136 @@ def run_screening(
             results.append((scored, evaluation))
             if progress:
                 progress(done, len(applicants), scored, run)
+    except BaseException as exc:
+        # BaseException on purpose: when the manager clicks something mid-run, Streamlit stops the script
+        # with an exception that is not an `Exception`. Close the run properly either way, then re-raise.
+        scored_iter.close()  # cancels queued AI calls; calls already in flight are not awaited
+        session.rollback()
+        interrupted = not isinstance(exc, Exception)
+        try:
+            _finalize_run(session, run, applicants, results, budget, client, prompt, interrupted=interrupted, error=None if interrupted else exc)
+        except Exception:
+            session.rollback()
+            failed = session.get(ScreeningRun, run.id)
+            failed.status, failed.finished_at = RUN_FAILED, utcnow()
+            failed.status_message = f"Unexpected error: {type(exc).__name__}: {exc}"
+            session.commit()
+        raise
+    _finalize_run(session, run, applicants, results, budget, client, prompt)
+    return run
 
-        counts = _decide(session, run, results)
-        if budget.stop_kind == "cost_cap":
-            run.status = RUN_STOPPED_COST_CAP
-            run.status_message = f"{budget.stop_message} Unscored applicants are in Needs review."
-        elif budget.stop_kind == "fatal":
-            run.status = RUN_FAILED
-            run.status_message = f"{budget.stop_message} Unscored applicants are in Needs review."
-        else:
-            run.status = RUN_COMPLETED
-        run.finished_at = utcnow()
+
+def _finalize_run(
+    session: Session,
+    run: ScreeningRun,
+    applicants: Sequence[Applicant],
+    results: list[tuple[ScoredApplicant, Evaluation]],
+    budget: _Budget,
+    client: LLMClient,
+    prompt: PromptTemplate,
+    *,
+    interrupted: bool = False,
+    error: BaseException | None = None,
+) -> None:
+    """Decide statuses for everyone reached, send everyone else to review, and close the run."""
+    if interrupted or error is not None:
+        reached = {evaluation.applicant_id for _, evaluation in results}
+        reason = (
+            "Not scored: the run was interrupted before this applicant (the page was refreshed or changed)."
+            if interrupted
+            else f"Not scored: the run stopped on an error ({type(error).__name__})."
+        )
+        for applicant in applicants:
+            if applicant.id not in reached:
+                scored = ScoredApplicant(applicant=applicant, flags={FLAG_NOT_SCORED: reason})
+                results.append((scored, _save_evaluation(session, run, scored)))
+
+    counts = _decide(session, run, results)
+    if interrupted:
+        run.status = RUN_INTERRUPTED
+        run.status_message = (
+            f"Interrupted after {run.applicants_scored} of {run.applicants_total} applicants (the page was "
+            "refreshed or another control was used). Unscored applicants are in Needs review; run again to "
+            "finish, and cached results make that cheap."
+        )
+    elif error is not None:
+        run.status = RUN_FAILED
+        run.status_message = f"Unexpected error: {type(error).__name__}: {error}. Unscored applicants are in Needs review."
+    elif budget.stop_kind == "cost_cap":
+        run.status = RUN_STOPPED_COST_CAP
+        run.status_message = f"{budget.stop_message} Unscored applicants are in Needs review."
+    elif budget.stop_kind == "fatal":
+        run.status = RUN_FAILED
+        run.status_message = f"{budget.stop_message} Unscored applicants are in Needs review."
+    else:
+        run.status = RUN_COMPLETED
+    if budget.discarded_calls:
+        run.status_message += (
+            f" {budget.discarded_calls} AI call(s) finished after the interruption; they are logged as discarded "
+            "and not counted in the totals."
+        )
+    if budget.inflight_calls:
+        run.status_message += f" {budget.inflight_calls} AI call(s) were still in flight and were not recorded."
+    run.finished_at = utcnow()
+    log_event(
+        session,
+        "run_finished",
+        run_id=run.id,
+        role_id=run.role_id,
+        model=client.model,
+        prompt_version=prompt.version,
+        payload={
+            "client": client.provider,
+            "status": run.status,
+            "message": run.status_message,
+            "counts": counts,
+            "applicants_total": run.applicants_total,
+            "applicants_scored": run.applicants_scored,
+            "llm_calls": run.llm_calls,
+            "cache_hits": run.cache_hits,
+            "total_tokens": run.total_tokens,
+            "total_cost": run.total_cost,
+            "discarded_calls": budget.discarded_calls,
+            "discarded_cost": round(budget.discarded_cost, 6),
+            "inflight_calls_unrecorded": budget.inflight_calls,
+        },
+    )
+    session.commit()
+
+
+def recover_stale_runs(session: Session, idle_minutes: int = 60) -> int:
+    """Close runs left "running" by an app restart (no audit activity for `idle_minutes`).
+
+    Their evaluations stay as they were (in Needs review); the run is marked interrupted with an explanation.
+    """
+    recovered = 0
+    now = utcnow()
+    for run in session.exec(select(ScreeningRun).where(ScreeningRun.status == RUN_RUNNING)):
+        last = session.exec(
+            select(AuditEvent.timestamp).where(AuditEvent.run_id == run.id).order_by(AuditEvent.id.desc()).limit(1)
+        ).first() or run.started_at
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        if (now - last).total_seconds() < idle_minutes * 60:
+            continue
+        run.status = RUN_INTERRUPTED
+        run.finished_at = now
+        run.status_message = (
+            f"No activity for {idle_minutes} minutes: the app probably restarted during this run. Its results are "
+            "incomplete and were not ranked; run the screen again (cached results make it cheap)."
+        )
         log_event(
             session,
             "run_finished",
             run_id=run.id,
-            role_id=role.id,
-            model=client.model,
-            prompt_version=prompt.version,
-            payload={
-                "client": client.provider,
-                "status": run.status,
-                "message": run.status_message,
-                "counts": counts,
-                "applicants_total": run.applicants_total,
-                "applicants_scored": run.applicants_scored,
-                "llm_calls": run.llm_calls,
-                "cache_hits": run.cache_hits,
-                "total_tokens": run.total_tokens,
-                "total_cost": run.total_cost,
-            },
+            role_id=run.role_id,
+            model=run.model_requested,
+            prompt_version=run.prompt_version,
+            payload={"status": run.status, "message": run.status_message, "recovered": True},
         )
-        session.commit()
-    except Exception as exc:
-        session.rollback()
-        run = session.get(ScreeningRun, run.id)
-        run.status = RUN_FAILED
-        run.status_message = f"Unexpected error: {type(exc).__name__}: {exc}"
-        run.finished_at = utcnow()
-        session.commit()
-        raise
-    return run
+        recovered += 1
+    session.commit()
+    return recovered
 
 
 def screenable(applicants: Sequence[Applicant]) -> list[Applicant]:

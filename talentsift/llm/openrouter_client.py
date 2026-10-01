@@ -35,8 +35,9 @@ from talentsift.llm.base import (
 
 # Errors worth one retry: dropped connections, timeouts (a subclass of APIConnectionError), 429, 5xx.
 _RETRYABLE = (APIConnectionError, RateLimitError, InternalServerError)
-# Status codes that mean "every later call will fail too".
-_FATAL_STATUS = {401, 402, 403, 404}
+# Status codes that mean "every later call will fail too": bad key, no credit, unknown model.
+# 403 is not here: OpenRouter uses it when one input is flagged by moderation, which is per applicant.
+_FATAL_STATUS = {401, 402, 404}
 # Status codes a provider returns when it cannot honor response_format / require_parameters.
 _STRUCTURED_REJECTED_STATUS = {400, 404, 422}
 

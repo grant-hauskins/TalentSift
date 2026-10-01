@@ -27,3 +27,15 @@ All notable changes to this project are documented here. The format follows
   button, and `AUTO_SEED_DEMO` for hosted demos.
 - **Process** (WBS 1 and 7): plan and WBS, requirements, traceability, decision log, architecture diagrams,
   contributing guide, issue and PR templates, CI running pytest on every pull request, README.
+
+### Fixed (code review, D-023 to D-026)
+- Names no longer leak when contact details share the name line, after a "Resume:" prefix, or below a contact bar;
+  joined name forms and mixed-case personal domains are masked.
+- Masking no longer destroys job text such as "300 Google Drive accounts", "IT 25000 tickets", "socket.io", or
+  "@Override"; graduation-year masking leaves work history alone.
+- A run interrupted by a click or page change is closed as `interrupted`, with every AI call logged and unreached
+  applicants in Needs review; stale runs are recovered; overrides wait until a run finishes.
+- Evidence quotes must match whole words; a moderation 403 fails one applicant, not the batch; the reply schema is in
+  the cache key; JSON containing code fences parses; `INSERT OR REPLACE` cannot rewrite audit rows; the consistency
+  check uses the run's policy; override forms never reuse a stale reason.
+- A fresh `.env.example` copy runs offline until a key is added.

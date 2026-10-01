@@ -46,6 +46,7 @@ class ConsistencyRow:
     original_status: str
     new_status: str
     criterion_scores_match: bool
+    same_inputs: bool = True  # False when the masked text or prompt changed since the run (not comparable)
 
 
 @dataclass
@@ -55,10 +56,12 @@ class ConsistencyReport:
     scores_identical: bool
     order_identical: bool
     statuses_identical: bool
+    inputs_changed: list[str] = field(default_factory=list)  # labels whose inputs changed since the run
 
     @property
     def passed(self) -> bool:
-        return self.scores_identical and self.order_identical and self.statuses_identical
+        comparable = any(r.same_inputs for r in self.rows)
+        return comparable and self.scores_identical and self.order_identical and self.statuses_identical
 
 
 def _status_from_run_policy(fit: float | None, must_haves: int, run: ScreeningRun, cutoff: list | None) -> str:
@@ -95,6 +98,13 @@ def consistency_check(
     session: Session, run: ScreeningRun, client: LLMClient, settings: Settings, sample_size: int = 5
 ) -> ConsistencyReport:
     role, criteria = _check_role_unchanged(session, run)
+    if client.model != run.model_requested:
+        raise FairnessCheckError(
+            f"Run {run.id} used {run.model_requested}; the selected AI provider uses {client.model}. "
+            "Pick the same provider and model to check consistency."
+        )
+    # Re-score under the run's own policy, so a later settings change does not look like model drift.
+    settings = settings.with_overrides(must_have_penalty=run.must_have_penalty)
     evaluations = list(
         session.exec(select(Evaluation).where(Evaluation.run_id == run.id, Evaluation.fit_score != None))  # noqa: E711
     )
@@ -137,20 +147,28 @@ def consistency_check(
                 original_status=evaluation.auto_status,
                 new_status=new_status,
                 criterion_scores_match=old_scores == new_scores,
+                same_inputs=new.cache_key == evaluation.cache_key,
             )
         )
 
-    original_order = [e.applicant_id for e in sorted(sample, key=lambda e: ranking_key(RankInput(e.applicant_id, e.fit_score, e.must_haves_met)))]
+    # Compare only applicants whose inputs are unchanged; changed inputs are reported, not called drift.
+    comparable = [(e, r) for e, r in zip(sample, rows) if r.same_inputs]
+    ids = {e.applicant_id for e, _ in comparable}
+    original_order = [
+        e.applicant_id
+        for e in sorted((e for e, _ in comparable), key=lambda e: ranking_key(RankInput(e.applicant_id, e.fit_score, e.must_haves_met)))
+    ]
     new_order = sorted(
-        rescored.values(),
+        (s for s in rescored.values() if s.applicant.id in ids),
         key=lambda s: ranking_key(RankInput(s.applicant.id, s.fit.fit_score if s.fit else None, s.fit.must_haves_met if s.fit else 0)),
     )
     report = ConsistencyReport(
         run_id=run.id,
         rows=rows,
-        scores_identical=all(r.criterion_scores_match and r.original_fit == r.new_fit for r in rows),
+        scores_identical=all(r.criterion_scores_match and r.original_fit == r.new_fit for _, r in comparable),
         order_identical=original_order == [s.applicant.id for s in new_order],
-        statuses_identical=all(r.original_status == r.new_status for r in rows),
+        statuses_identical=all(r.original_status == r.new_status for _, r in comparable),
+        inputs_changed=[r.display_label for r in rows if not r.same_inputs],
     )
     log_event(
         session,
@@ -165,6 +183,7 @@ def consistency_check(
             "scores_identical": report.scores_identical,
             "order_identical": report.order_identical,
             "statuses_identical": report.statuses_identical,
+            "inputs_changed": report.inputs_changed,
             "sample": [r.__dict__ for r in rows],
         },
     )

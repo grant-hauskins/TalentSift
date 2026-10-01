@@ -8,6 +8,7 @@ from sqlmodel import select
 
 from talentsift import ui
 from talentsift.models import (
+    RUN_RUNNING,
     STATUS_AUTO_REJECTED,
     STATUS_NEEDS_REVIEW,
     STATUS_NOT_SHORTLISTED,
@@ -28,6 +29,7 @@ from talentsift.overrides import (
     overrides_for_run,
 )
 from talentsift.roles import criteria_for_version
+from talentsift.scoring import recover_stale_runs
 
 ui.page_setup("Results", icon="🏆")
 
@@ -112,6 +114,10 @@ def detail(evaluation, applicant, rows) -> None:
 
 
 def override_form(session, evaluation, targets, *, label: str, key: str) -> None:
+    if run_in_progress:
+        st.caption("Available when the run finishes.")
+        return
+    key = f"{key}_{evaluation.status}"  # a new status gets a fresh, empty form
     with st.form(key):
         to_status = st.selectbox("Move to", targets, format_func=ui.status_label, key=f"{key}_to")
         reason = st.text_area(f"Reason (required, at least {MIN_REASON_LENGTH} characters)", height=70, key=f"{key}_reason")
@@ -125,6 +131,7 @@ def override_form(session, evaluation, targets, *, label: str, key: str) -> None
 
 
 with ui.db_session() as session:
+    recover_stale_runs(session)
     runs = list(session.exec(select(ScreeningRun).order_by(ScreeningRun.id.desc())))
     if not runs:
         st.info("No screening runs yet.")
@@ -140,8 +147,11 @@ with ui.db_session() as session:
         format_func=lambda r: f"Run {r.id} · {roles[r.role_id].title} v{r.role_version} · {ui.fmt_time(r.started_at)} · {r.status}",
     )
     st.session_state.run_id = run.id
+    run_in_progress = run.status == RUN_RUNNING
     if flash := st.session_state.pop("flash", None):
         st.success(flash)
+    if run_in_progress:
+        st.info("This run is still in progress. Statuses are final, and can be changed, once it finishes.")
 
     criteria = criteria_for_version(session, run.role_id, run.role_version)
     evaluations = list(session.exec(select(Evaluation).where(Evaluation.run_id == run.id)))
@@ -156,7 +166,7 @@ with ui.db_session() as session:
         f"threshold {run.auto_reject_threshold} · top {run.top_n} · mode {run.auto_reject_mode} · "
         f"{run.total_tokens:,} tokens · ${run.total_cost:.4f} · {run.cache_hits} cached"
     )
-    if run.status != "completed":
+    if run.status not in ("completed", RUN_RUNNING):
         st.error(f"This run {run.status.replace('_', ' ')}: {run.status_message}")
 
     def with_status(*statuses):
@@ -233,9 +243,9 @@ with ui.db_session() as session:
                     override_form(session, e, [STATUS_SHORTLISTED, STATUS_NEEDS_REVIEW], label="Apply override", key=f"ov_{e.id}")
 
     with tabs[2]:
-        if pending:
+        if pending and not run_in_progress:
             st.subheader(f"Proposed rejections ({len(pending)})")
-            note = st.text_input("Note for the audit log (optional)", key="confirm_note")
+            note = st.text_input("Note for the audit log (optional)", key=f"confirm_note_{run.id}")
             if st.button(f"Confirm {len(pending)} rejection(s)", type="primary"):
                 count = confirm_pending_rejections(session, run, note=note)
                 st.session_state.flash = f"{count} rejection(s) confirmed and logged."

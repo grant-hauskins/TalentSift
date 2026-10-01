@@ -138,3 +138,32 @@ Format: **ID - title** (date, decided by). Context, decision, consequences.
 - **Decision:** `seed_demo` drafts each sample role with the AI, deletes any criterion flagged as a possible
   proxy (the Operations posting plants "Recent graduate preferred"), then approves, as a careful manager would.
   The manual flow on the Roles page keeps the flag visible so the manager makes that call.
+
+## Code review fixes (2026-10-01)
+
+An independent review of the core modules found 12 issues, all reproduced and fixed with regression tests.
+
+### D-023 - Runs survive interruption
+- **Context:** Clicking any control mid-run makes Streamlit stop the script with a signal that is not an
+  `Exception`. Runs were left "running" forever, unranked, with AI calls made but not logged.
+- **Decision:** `run_screening` catches any interruption, cancels queued AI calls, writes discarded-but-finished
+  calls to the audit log, sends unreached applicants to Needs review, ranks the rest, and closes the run as
+  `interrupted`. Runs left "running" by an app restart are closed after 60 idle minutes. Overrides are refused
+  while a run is in progress, because statuses are decided when it finishes.
+
+### D-024 - Masking precision over blunt patterns
+- **Decision:** Name detection handles contact details on the name line, "Resume:" prefixes, contact bars, and
+  title lines, and stops at job titles. Joined name forms (janedoe, jane-doe) and mixed-case personal domains are
+  masked. Address, ZIP, domain, and handle rules are anchored so job text survives ("300 Google Drive accounts",
+  "IT 25000 tickets", "socket.io", "@Override").
+
+### D-025 - Evidence quotes must match whole words
+- **Decision:** `verify_quote` matches on word boundaries, so "Excel" is not verified by "Excellent".
+
+### D-026 - Smaller hardening
+- HTTP 403 (OpenRouter moderation) fails one applicant, not the batch; 401, 402, and 404 still stop the run.
+- The reply schema is part of the cache key; JSON replies are parsed whole before looking for code fences.
+- `PRAGMA recursive_triggers=ON`, so `INSERT OR REPLACE` cannot bypass the append-only triggers.
+- The consistency check re-scores under the run's own penalty, refuses a different model, and reports changed
+  inputs (for example re-masked text) separately from drift.
+- Override forms are keyed by status, so a reinstated applicant's form never reappears pre-filled.

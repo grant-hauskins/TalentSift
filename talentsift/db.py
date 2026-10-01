@@ -52,6 +52,8 @@ def create_db_engine(database_url: str) -> Engine:
         def _sqlite_pragmas(dbapi_connection, _record):  # pragma: no cover - trivial
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
+            # Without this, INSERT OR REPLACE deletes a row without firing the append-only delete trigger.
+            cursor.execute("PRAGMA recursive_triggers=ON")
             cursor.close()
 
     return engine

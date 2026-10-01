@@ -68,6 +68,7 @@ EVALUATION_STATUSES = (
 RUN_RUNNING = "running"
 RUN_COMPLETED = "completed"
 RUN_STOPPED_COST_CAP = "stopped_cost_cap"
+RUN_INTERRUPTED = "interrupted"  # the page was refreshed or the app restarted mid-run
 RUN_FAILED = "failed"
 
 

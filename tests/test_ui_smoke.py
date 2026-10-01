@@ -109,7 +109,7 @@ def test_screen_run_and_reinstate_flow(seeded):
     assert not at.exception, at.exception
     assert [t.label for t in at.tabs][:4] == ["Shortlist (1)", "Not shortlisted (1)", "Auto-rejected (1)", "Needs review (0)"]
 
-    key = f"ov_{rejected.id}"
+    key = f"ov_{rejected.id}_auto_rejected"  # form keys carry the current status
     at.text_area(key=f"{key}_reason").input("ok")
     at.button(key=f"{key}_submit").click().run()
     assert any("at least 10 characters" in e.value for e in at.error)  # a reason is required
@@ -119,6 +119,8 @@ def test_screen_run_and_reinstate_flow(seeded):
     assert not at.exception, at.exception
     with new_session(seeded) as session:
         assert session.get(Evaluation, rejected.id).status == "not_shortlisted"
+    # The applicant's form in its new tab starts empty: the old reason cannot be re-submitted by accident.
+    assert at.text_area(key=f"ov_{rejected.id}_not_shortlisted_reason").value == ""
 
     at.switch_page("pages/5_Audit.py").run()
     assert not at.exception, at.exception

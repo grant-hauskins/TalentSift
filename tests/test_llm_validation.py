@@ -141,3 +141,8 @@ def test_fake_rubric_draft_follows_posting_and_flags_proxies():
     flagged = [c for c in draft.criteria if c.proxy_risk]
     assert [c.description for c in flagged] == ["Recent graduate preferred"]
     assert "age" in flagged[0].proxy_note
+
+
+def test_valid_json_containing_a_code_fence_is_accepted():
+    reply = json.dumps({**GOOD, "summary": "Uses ```code fences``` in docs."})
+    assert extract_json_object(reply)["summary"] == "Uses ```code fences``` in docs."

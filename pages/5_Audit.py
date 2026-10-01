@@ -141,6 +141,11 @@ with ui.db_session() as session:
                             f"{'Passed' if report.passed else 'Differences found'}: scores identical {report.scores_identical}, "
                             f"order identical {report.order_identical}, statuses identical {report.statuses_identical}."
                         )
+                        if report.inputs_changed:
+                            st.warning(
+                                "Not comparable (masked text or prompt changed since the run, for example after "
+                                f"re-masking): {', '.join(report.inputs_changed)}."
+                            )
                         st.dataframe(
                             pd.DataFrame(
                                 [
@@ -151,6 +156,7 @@ with ui.db_session() as session:
                                         "original status": r.original_status,
                                         "re-run status": r.new_status,
                                         "criterion scores match": r.criterion_scores_match,
+                                        "same inputs": r.same_inputs,
                                     }
                                     for r in report.rows
                                 ]

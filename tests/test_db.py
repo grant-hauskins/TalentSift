@@ -120,3 +120,17 @@ def test_env_example_runs_offline_until_a_key_is_added():
     env["OPENROUTER_API_KEY"] = "sk-or-test"
     settings = Settings.from_env(env)
     assert settings.llm_provider == "openrouter" and settings.llm_model  # example model slug is filled in
+
+
+def test_insert_or_replace_cannot_rewrite_an_audit_event(engine, session):
+    event = log_event(session, "export", payload={"rows": 1})
+    session.commit()
+    with engine.connect() as connection:
+        with pytest.raises(DatabaseError, match="append-only"):
+            connection.execute(
+                text(
+                    "INSERT OR REPLACE INTO audit_event (id, timestamp, event_type, payload_json) "
+                    "VALUES (:id, '2020-01-01', 'export', '{\"rows\": 999}')"
+                ),
+                {"id": event.id},
+            )

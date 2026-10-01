@@ -120,21 +120,20 @@ def extract_json_object(text: str) -> dict[str, Any] | None:
     """Parse a JSON object from a reply, tolerating code fences or stray prose around it."""
     if not text:
         return None
-    candidate = text.strip()
-    fenced = re.search(r"```(?:json)?\s*(.*?)```", candidate, re.DOTALL)
+    candidates = [text.strip()]  # the whole reply first: valid JSON may itself contain ``` in a string
+    fenced = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
     if fenced:
-        candidate = fenced.group(1).strip()
-    try:
-        value = json.loads(candidate)
-    except json.JSONDecodeError:
-        start, end = candidate.find("{"), candidate.rfind("}")
-        if start == -1 or end <= start:
-            return None
+        candidates.append(fenced.group(1).strip())
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end > start:
+        candidates.append(text[start : end + 1])
+    for candidate in candidates:
         try:
-            value = json.loads(candidate[start : end + 1])
+            value = json.loads(candidate)
         except json.JSONDecodeError:
-            return None
-    return value if isinstance(value, dict) else None
+            continue
+        return value if isinstance(value, dict) else None
+    return None
 
 
 def describe_validation_error(exc: Exception) -> str:

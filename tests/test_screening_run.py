@@ -213,3 +213,63 @@ def test_same_folder_two_roles_two_rankings(session, settings, setup):
     first = lambda run: min(evaluations(session, run).values(), key=lambda e: e.rank or 99).applicant_id
     assert first(analyst_run) == applicants[0].id
     assert first(retail_run) == applicants[2].id
+
+
+class PageRerun(BaseException):
+    """Stands in for Streamlit's rerun signal, which is a BaseException, not an Exception."""
+
+
+def test_interrupted_run_is_closed_and_nobody_is_lost(session, settings):
+    role = make_role(session, threshold=40, top_n=1)
+    applicants = [make_applicant(session, text + f"\nfiller {i}\n") for i in range(3) for text in (STRONG, MEDIUM, WEAK)]
+    client = FakeLLMClient()
+
+    def click_during_run(done, total, scored, run):
+        if done == 2:
+            raise PageRerun()
+
+    with pytest.raises(PageRerun):
+        run_screening(session, role=role, applicants=applicants, client=client, settings=settings, progress=click_during_run)
+
+    from talentsift.models import RUN_INTERRUPTED, ScreeningRun
+
+    run = session.exec(select(ScreeningRun)).one()
+    assert run.status == RUN_INTERRUPTED and run.finished_at is not None
+    by_id = evaluations(session, run)
+    assert len(by_id) == len(applicants)  # every applicant has a result
+    unreached = [e for e in by_id.values() if "not_scored" in flags(e)]
+    assert len(unreached) == len(applicants) - 2
+    assert {e.status for e in unreached} == {STATUS_NEEDS_REVIEW}
+    types = [e.event_type for e in list_events(session, run_id=run.id)]
+    assert types.count("ranking_computed") == 1 and types[-1] == "run_finished"
+    # Every AI call that was made is in the audit log, used or discarded.
+    assert types.count("llm_request") == len(client.calls)
+
+
+def test_stale_running_run_is_recovered(session, settings):
+    from datetime import timedelta
+
+    from talentsift.models import RUN_INTERRUPTED, RUN_RUNNING, ScreeningRun, utcnow
+    from talentsift.scoring import recover_stale_runs
+
+    role = make_role(session)
+    stale = ScreeningRun(role_id=role.id, role_version=1, model_requested="m", prompt_version="p", status=RUN_RUNNING,
+                         started_at=utcnow() - timedelta(hours=3))
+    fresh = ScreeningRun(role_id=role.id, role_version=1, model_requested="m", prompt_version="p", status=RUN_RUNNING)
+    session.add_all([stale, fresh])
+    session.commit()
+    assert recover_stale_runs(session, idle_minutes=60) == 1
+    assert (stale.status, fresh.status) == (RUN_INTERRUPTED, RUN_RUNNING)
+
+
+def test_overrides_are_refused_while_a_run_is_in_progress(session, settings, setup):
+    from talentsift.models import RUN_RUNNING
+    from talentsift.overrides import OverrideError, override_status
+
+    role, applicants = setup
+    run = run_screening(session, role=role, applicants=applicants, client=FakeLLMClient(), settings=settings)
+    run.status = RUN_RUNNING  # as seen from another browser tab mid-run
+    session.commit()
+    evaluation = next(iter(evaluations(session, run).values()))
+    with pytest.raises(OverrideError, match="still in progress"):
+        override_status(session, evaluation, "needs_review" if evaluation.status != "needs_review" else "shortlisted", "Checking this candidate by hand")

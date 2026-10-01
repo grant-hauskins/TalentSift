@@ -157,3 +157,10 @@ def test_factory_uses_model_from_settings():
     client = build_client(Settings(llm_provider="openrouter", openrouter_api_key="sk", llm_model="vendor/abc"))
     assert isinstance(client, OpenRouterClient) and client.model == "vendor/abc"
     assert build_client(Settings(llm_provider="fake")).provider == "fake"
+
+
+def test_moderation_403_is_a_per_applicant_error_not_fatal():
+    recorder = Recorder(httpx.Response(403, json={"error": {"message": "Input was flagged by moderation"}}))
+    with pytest.raises(LLMError) as raised:
+        make_client(recorder).complete_json("s", "u", ScreeningOutput)
+    assert raised.value.status_code == 403 and not raised.value.fatal

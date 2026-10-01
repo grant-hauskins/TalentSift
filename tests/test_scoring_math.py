@@ -101,3 +101,27 @@ def test_real_quotes_verify(quote):
 )
 def test_fabricated_or_altered_quotes_fail(quote):
     assert not verify_quote(quote, SOURCE)
+
+
+@pytest.mark.parametrize(
+    ("quote", "source"),
+    [
+        ("Excel", "Excellent communicator with a friendly manner."),  # code review: a short quote inside a word
+        ("SQL", "Built NoSQL document stores."),
+        ("Java", "Wrote JavaScript front ends."),
+    ],
+)
+def test_quotes_must_match_whole_words(quote, source):
+    assert not verify_quote(quote, normalize_for_match(source))
+    assert verify_quote(quote, normalize_for_match(f"Used {quote} daily."))
+
+
+def test_reply_schema_is_part_of_the_cache_key(monkeypatch):
+    from types import SimpleNamespace
+
+    from talentsift import scoring
+
+    role, prompt = SimpleNamespace(id=1, version=1), SimpleNamespace(cache_id="screen_v1@abc")
+    before = scoring.cache_key_for("text", role, "rubric", prompt, "model")
+    monkeypatch.setattr(scoring, "_SCHEMA_DIGEST", "edited-schema")
+    assert scoring.cache_key_for("text", role, "rubric", prompt, "model") != before

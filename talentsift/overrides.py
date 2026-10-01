@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 
 from talentsift.audit import log_event
 from talentsift.models import (
+    RUN_RUNNING,
     STATUS_AUTO_REJECTED,
     STATUS_NEEDS_REVIEW,
     STATUS_NOT_SHORTLISTED,
@@ -34,6 +35,12 @@ class OverrideError(ValueError):
     """The override was refused; the message is shown to the manager."""
 
 
+def _require_finished(run: ScreeningRun | None) -> None:
+    """Statuses are decided when a run finishes, so a change made mid-run would be overwritten."""
+    if run is not None and run.status == RUN_RUNNING:
+        raise OverrideError("This run is still in progress. Wait for it to finish before changing statuses.")
+
+
 def _require_reason(reason: str) -> str:
     reason = (reason or "").strip()
     if len(reason) < MIN_REASON_LENGTH:
@@ -44,6 +51,7 @@ def _require_reason(reason: str) -> str:
 def override_status(session: Session, evaluation: Evaluation, to_status: str, reason: str) -> Override:
     """Change an evaluation's status with a logged reason."""
     reason = _require_reason(reason)
+    _require_finished(session.get(ScreeningRun, evaluation.run_id))
     if to_status not in OVERRIDE_TARGETS:
         raise OverrideError(f"Status must be one of {OVERRIDE_TARGETS}.")
     if to_status == evaluation.status:
@@ -97,6 +105,7 @@ def pending_rejections(session: Session, run: ScreeningRun) -> list[Evaluation]:
 
 def confirm_pending_rejections(session: Session, run: ScreeningRun, note: str = "") -> int:
     """Confirm mode: the manager approves the batch, so the proposed rejections now apply."""
+    _require_finished(run)
     pending = pending_rejections(session, run)
     for evaluation in pending:
         evaluation.status = STATUS_AUTO_REJECTED

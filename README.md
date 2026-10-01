@@ -156,11 +156,14 @@ Ownership for parallel work (data, AI, UX owners) is in [CONTRIBUTING.md](CONTRI
 ## Known limitations
 
 - **Formats**: text-based PDFs only. DOCX is a stub; scanned PDFs are flagged `needs_ocr` and skipped.
-- **Name masking is a heuristic.** It takes the name from the first line and masks every later capitalized
-  occurrence. If line one is not the name, the name is missed; capitalized words that match a name (for example
-  "Grant") are over-masked. Other signals can remain (affinity groups, locations without ZIP codes, pronouns).
-- **Address and phone masking** target US-style addresses with ZIP codes, North American numbers, and "+"
-  international numbers.
+- **Name masking is a heuristic.** It finds the name at the top of the resume (skipping a "Resume" title or a
+  contact bar) and masks every later capitalized occurrence plus joined forms such as "janedoe". If the first
+  meaningful line is not the name, the name is missed; capitalized words that match a name (for example "Grant")
+  are over-masked. Other signals can remain (affinity groups, locations without ZIP codes, pronouns).
+- **Address and phone masking** target capitalized US-style street addresses and ZIP codes, North American
+  numbers, "+" international numbers, and national numbers starting with 0. Lowercase addresses are not caught.
+- **Keep the Screen page open during a run.** Clicking elsewhere interrupts it: results so far are kept, the rest
+  go to Needs review, and the next run reuses cached work ([D-023](docs/decisions.md)).
 - **Evidence checks prove a quote exists, not that it supports the score.** Reviewers should still read them.
 - **The offline client is a keyword matcher** for tests and demos, not a real assessment.
 - **Cost cap** relies on the cost OpenRouter reports, and can overshoot by the calls already in flight.

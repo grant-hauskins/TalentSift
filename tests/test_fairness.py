@@ -1,5 +1,6 @@
 """Name-swap and consistency checks."""
 
+import pytest
 from sqlmodel import select
 
 from talentsift.audit import event_payload, list_events
@@ -72,3 +73,26 @@ def test_consistency_check_flags_a_drifting_model(session, settings):
 
     report = consistency_check(session, run, FakeLLMClient(tamper=drift), settings, sample_size=3)
     assert not report.passed and not report.scores_identical
+
+
+def test_consistency_check_uses_the_runs_policy_and_reports_changed_inputs(session, settings):
+    from talentsift.fairness import FairnessCheckError
+    from talentsift.masking import mask_text
+
+    role = make_role(session, threshold=40, top_n=1)
+    applicants = [make_applicant(session, text) for text in (STRONG, MEDIUM, WEAK)]
+    run = run_screening(session, role=role, applicants=applicants, client=FakeLLMClient(), settings=settings)
+
+    # A later change to MUST_HAVE_PENALTY is policy, not model drift.
+    report = consistency_check(session, run, FakeLLMClient(), settings.with_overrides(must_have_penalty=5), sample_size=3)
+    assert report.passed
+
+    # Re-masked text means different inputs: reported as not comparable instead of drift.
+    applicants[2].masked_text = mask_text(WEAK).masked_text + "\nVolunteer: food bank."
+    session.commit()
+    report = consistency_check(session, run, FakeLLMClient(), settings, sample_size=3)
+    assert report.inputs_changed == [applicants[2].display_label]
+    assert report.scores_identical and report.statuses_identical
+
+    with pytest.raises(FairnessCheckError, match="Pick the same provider"):
+        consistency_check(session, run, FakeLLMClient(model="other/model"), settings)
