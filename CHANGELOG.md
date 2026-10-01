@@ -23,3 +23,5 @@ All notable changes to this project are documented here. The format follows
   `confirm` mode, job-related reasons, per-batch cost cap.
 - Overrides and one-click reinstatement with required reasons; append-only override records.
 - Fairness checks: consistency re-run on a sample and name-swap test.
+- Streamlit app: Home, Roles, Applicants, Screen, Results, and Audit pages with the disclaimer banner on every page,
+  a global AI provider picker (OpenRouter or offline), and headless AppTest coverage.
