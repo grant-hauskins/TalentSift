@@ -10,7 +10,7 @@ Built as the MVP for a Systems Analysis & Design course project. Fictional data 
 
 ## Quick start (local, offline, about 2 minutes)
 
-Needs Python 3.11 or newer (`python --version`).
+Needs Python 3.11 or newer (`python --version`); CI tests 3.11 and 3.14.
 
 **macOS / Linux**
 

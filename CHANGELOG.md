@@ -39,3 +39,5 @@ All notable changes to this project are documented here. The format follows
   the cache key; JSON containing code fences parses; `INSERT OR REPLACE` cannot rewrite audit rows; the consistency
   check uses the run's policy; override forms never reuse a stale reason.
 - A fresh `.env.example` copy runs offline until a key is added.
+- Sample PDFs stay binary on Windows checkouts (`.gitattributes`); the README has Windows setup steps; CI tests
+  Python 3.11 and 3.14.
