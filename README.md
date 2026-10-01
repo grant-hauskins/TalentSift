@@ -42,6 +42,16 @@ In PowerShell, activate with `.venv\Scripts\Activate.ps1` instead. If PowerShell
 No API key? The app uses the deterministic **offline fake client**. It is also the demo backup: switch to it in
 the sidebar if the network fails mid-presentation.
 
+### Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| Browser: "Unable to connect" to `localhost:8501` | The server is not running yet. Check the terminal: on the first run Streamlit waits at `Email:`; press Enter. If it shows another `Local URL` (for example `:8502`), open that. If the prompt came back, run `streamlit run app.py` again and keep the window open. |
+| Windows: `'source' is not recognized` | Use `.venv\Scripts\activate` (Command Prompt) or `.venv\Scripts\Activate.ps1` (PowerShell). |
+| PowerShell will not run `Activate.ps1` | Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. |
+| Windows: `test_parsers` or `test_end_to_end` fail on the sample PDFs | The PDFs were checked out before `.gitattributes` protected them. Run `del /q data\resumes\samples\*.pdf` then `git checkout -- data/resumes/samples`. |
+| "OPENROUTER_API_KEY is not set" | Add the key to `.env`, or pick "Offline fake client" in the sidebar. |
+
 ## What it does
 
 | Page | What the manager does |
