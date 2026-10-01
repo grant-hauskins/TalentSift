@@ -13,3 +13,6 @@ All notable changes to this project are documented here. The format follows
 - Deterministic PII masking: names (first-line heuristic), emails, phones, URLs and handles, street addresses and
   ZIP codes, image content; optional graduation-year masking.
 - Resume ingestion from uploads or a folder, with duplicate detection and PII-free audit events.
+- Provider-agnostic `LLMClient` with a validate-and-retry-once loop; OpenRouter client (OpenAI SDK, strict JSON
+  schema, `require_parameters`, plain-JSON fallback, one network retry); deterministic offline fake client.
+- Versioned prompts `screen_v1` and `rubric_draft_v1`.
