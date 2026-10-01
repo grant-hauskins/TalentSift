@@ -22,11 +22,11 @@ def test_pdf_parser_extracts_text(tmp_path):
 
 
 def test_committed_sample_resumes_parse():
-    pdfs = sorted(SAMPLES.glob("*.pdf"))
-    if not pdfs:  # samples are generated in build step 6; this test tightens automatically then
-        return
-    statuses = {path.name: parse_file(path)[0].status for path in pdfs}
-    assert sum(status == PARSE_PARSED for status in statuses.values()) >= 15
+    statuses = {path.name: parse_file(path)[0].status for path in sorted(SAMPLES.glob("*.pdf"))}
+    assert len(statuses) == 20
+    assert statuses.pop("19_parker_partialton.pdf") == PARSE_PARTIAL
+    assert statuses.pop("20_logan_scannerly.pdf") == PARSE_NEEDS_OCR
+    assert set(statuses.values()) == {PARSE_PARSED}
 
 
 def test_near_empty_pdf_is_flagged_needs_ocr(tmp_path):

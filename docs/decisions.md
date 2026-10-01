@@ -122,3 +122,17 @@ Format: **ID - title** (date, decided by). Context, decision, consequences.
 - **Context:** The MVP scaffold was generated in a single build session restricted to one branch.
 - **Decision:** The initial build landed on one branch with one conventional commit per build step, each tagged
   with its WBS ids. From here on, every task gets its own `wbs-<id>-<slug>` branch and pull request.
+
+### D-021 - Classic `pages/` multipage app instead of `st.navigation`
+- **Context:** With `st.navigation` in `app.py` and a `pages/` folder, a fresh session that opened a page URL
+  directly (for example `/Results` right after a restart) skipped `app.py`, so it lost the sidebar picker and the
+  wide layout until someone visited Home.
+- **Decision:** Use Streamlit's classic `pages/` folder. Every page, including `app.py`, starts with
+  `ui.page_setup`, which sets the page config and draws the disclaimer banner and the AI provider picker.
+- **Consequences:** The banner and picker appear on every page however it is opened, and pages test in isolation.
+  The home entry in the sidebar is labeled "app" (Streamlit names it after the entry file).
+
+### D-022 - Demo seeding removes AI-flagged proxy criteria before approving
+- **Decision:** `seed_demo` drafts each sample role with the AI, deletes any criterion flagged as a possible
+  proxy (the Operations posting plants "Recent graduate preferred"), then approves, as a careful manager would.
+  The manual flow on the Roles page keeps the flag visible so the manager makes that call.

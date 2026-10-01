@@ -19,8 +19,7 @@ from talentsift.models import Applicant, Role, ScreeningRun
 
 ALL = "All"
 
-settings = ui.settings()
-ui.page_header("Audit", "Every step is an append-only event: nothing here can be edited or deleted.")
+settings = ui.page_setup("Audit", "Every step is an append-only event: nothing here can be edited or deleted.", icon="🔍")
 
 
 def log_export(row_count: int, filters: dict, csv_text: str) -> None:
@@ -132,7 +131,7 @@ with ui.db_session() as session:
             c1, c2 = st.columns([3, 1])
             run = c1.selectbox("Run to check", runs, format_func=lambda r: f"Run {r.id} · {roles[r.role_id].title} v{r.role_version}")
             size = c2.number_input("Sample size", min_value=2, max_value=20, value=5)
-            if st.button("Run consistency check"):
+            if st.button("Run consistency check", key="consistency_button"):
                 client = ui.get_client()
                 if client is not None:
                     try:
@@ -142,7 +141,23 @@ with ui.db_session() as session:
                             f"{'Passed' if report.passed else 'Differences found'}: scores identical {report.scores_identical}, "
                             f"order identical {report.order_identical}, statuses identical {report.statuses_identical}."
                         )
-                        st.dataframe(pd.DataFrame([r.__dict__ for r in report.rows]), hide_index=True, width="stretch")
+                        st.dataframe(
+                            pd.DataFrame(
+                                [
+                                    {
+                                        "applicant": r.display_label,
+                                        "original fit": r.original_fit,
+                                        "re-run fit": r.new_fit,
+                                        "original status": r.original_status,
+                                        "re-run status": r.new_status,
+                                        "criterion scores match": r.criterion_scores_match,
+                                    }
+                                    for r in report.rows
+                                ]
+                            ),
+                            hide_index=True,
+                            width="stretch",
+                        )
                     except FairnessCheckError as exc:
                         st.error(str(exc))
         else:
@@ -165,7 +180,7 @@ with ui.db_session() as session:
             second = c3.selectbox("Resume B", screenable, index=screenable.index(second_default), format_func=fmt)
             if candidates:
                 st.caption("Detected name-swap pair(s): " + ", ".join(f"{a.display_label} & {b.display_label}" for a, b in candidates))
-            if st.button("Run name-swap test"):
+            if st.button("Run name-swap test", key="name_swap_button"):
                 client = ui.get_client()
                 if client is not None and first.id != second.id:
                     run = latest_run_with(session, role, [first.id, second.id])

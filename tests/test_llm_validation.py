@@ -95,7 +95,7 @@ def test_fake_screening_quotes_resume_lines_verbatim():
     output = ScreeningOutput.model_validate(reply)
     check_screening_output(output, [7, 8])
     sql, forklift = output.criteria
-    assert sql.score >= 3 and sql.evidence == ["- Wrote SQL queries for weekly reports."]
+    assert sql.score >= 3 and sql.evidence == ["Wrote SQL queries for weekly reports."]  # bullet marker dropped
     assert forklift.score == 0 and forklift.evidence == [] and forklift.rationale == "No evidence found."
 
 
@@ -136,7 +136,8 @@ def test_fake_rubric_draft_follows_posting_and_flags_proxies():
     check_rubric_draft(draft)
     assert draft.role_title == "Business Data Analyst"
     assert [c.type for c in draft.criteria].count("must_have") == 4
-    assert draft.criteria[0].name == "Writing SQL queries to analyze sales data"
+    assert draft.criteria[0].name == "Writing SQL queries"  # filler and the "to ..." tail are trimmed
+    assert draft.criteria[0].description == "2+ years writing SQL queries to analyze sales data"
     flagged = [c for c in draft.criteria if c.proxy_risk]
     assert [c.description for c in flagged] == ["Recent graduate preferred"]
     assert "age" in flagged[0].proxy_note

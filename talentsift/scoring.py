@@ -736,10 +736,10 @@ def run_screening(
         run_id=run.id,
         role_id=role.id,
         model=client.model,
-        provider=client.provider,
         prompt_version=prompt.version,
         input_hash=rubric_hash(role, criteria),
         payload={
+            "client": client.provider,
             "rubric": rubric_snapshot(role, criteria),
             "prompt_sha256": prompt.sha256,
             "batch_label": batch_label,
@@ -802,9 +802,9 @@ def run_screening(
             run_id=run.id,
             role_id=role.id,
             model=client.model,
-            provider=client.provider,
             prompt_version=prompt.version,
             payload={
+                "client": client.provider,
                 "status": run.status,
                 "message": run.status_message,
                 "counts": counts,

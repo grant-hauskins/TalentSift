@@ -33,6 +33,7 @@ _STOPWORDS = {
     "we", "they", "their", "who", "what", "which", "will", "can", "may", "must", "should", "would", "such",
     "other", "than", "then", "per", "via", "etc", "e.g", "i.e", "and/or", "not", "no", "all", "any", "each",
     "both", "more", "most", "least", "about", "over", "under", "up", "out", "also", "has", "have", "had",
+    "non", "my", "me", "i",
 }  # fmt: skip
 # Words that appear in almost every posting and say little about a specific skill.
 _GENERIC = {
@@ -94,7 +95,8 @@ def screen_offline(user_prompt: str) -> dict[str, Any]:
     """Score the resume in a screening prompt against its criteria (see prompts/screen_v1.md)."""
     criteria = json.loads(_tag(user_prompt, "criteria") or "[]")
     resume = _tag(user_prompt, "resume")
-    lines = [line.strip() for line in resume.splitlines() if line.strip()]
+    # Lines without bullet markers, so quotes read cleanly (they remain verbatim substrings of the resume).
+    lines = [re.sub(r"^[-*•]\s+", "", line.strip()) for line in resume.splitlines() if line.strip()]
     line_keywords = [set(keywords(line)) for line in lines]
 
     assessments, strengths, gaps = [], [], []
@@ -191,11 +193,17 @@ def proxy_note(text: str) -> str:
     return ""
 
 
+_CONNECTORS = re.compile(r"\s+(?:to|for|with|such as|including|across|in order to)\s+", re.IGNORECASE)
+
+
 def _criterion_name(bullet: str) -> str:
+    """A short label from a bullet: drop filler ("2+ years of"), cut at a connector ("to", "for", ...)."""
     text = _LEADING_FILLER.sub("", bullet).strip()
     text = re.split(r"[.;:(]", text)[0].strip() or bullet
-    words = text.split()
-    name = " ".join(words[:7])
+    head = _CONNECTORS.split(text, maxsplit=1)[0]
+    if len(head.split()) >= 2:
+        text = head
+    name = " ".join(text.split()[:7])
     return name[:1].upper() + name[1:]
 
 

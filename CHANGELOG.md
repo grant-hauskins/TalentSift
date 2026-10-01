@@ -25,3 +25,10 @@ All notable changes to this project are documented here. The format follows
 - Fairness checks: consistency re-run on a sample and name-swap test.
 - Streamlit app: Home, Roles, Applicants, Screen, Results, and Audit pages with the disclaimer banner on every page,
   a global AI provider picker (OpenRouter or offline), and headless AppTest coverage.
+- Sample data: 20 fictional PDF resumes with planted strong, borderline, and weak fits for two roles, a name-swap
+  pair, a partially scanned resume, and an image-only resume; two role profiles.
+- `scripts/seed_demo.py` and an in-app "Load demo data" button (plus `AUTO_SEED_DEMO` for hosted demos).
+
+### Changed
+- Pages are self-contained in Streamlit's classic `pages/` folder, so the banner and AI provider picker appear on
+  every page even when it is opened directly by URL (D-021).

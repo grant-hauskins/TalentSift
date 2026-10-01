@@ -84,26 +84,51 @@ def banner() -> None:
     st.info(BANNER, icon="⚖️")
 
 
-def page_header(title: str, caption: str | None = None) -> None:
-    """Every page starts with the banner and its title. Call this first on each page."""
+def page_setup(title: str, caption: str | None = None, *, icon: str = "🧭") -> Settings:
+    """First call on every page: page config, the disclaimer banner, the title, and the sidebar.
+
+    Each page is self-contained (Streamlit's classic `pages/` folder), so the banner and the AI provider
+    picker appear no matter which page a manager opens first.
+    """
+    st.set_page_config(page_title=f"{title} · TalentSift", page_icon=icon, layout="wide")
+    current = settings()
+    if current.auto_seed_demo:
+        _auto_seed_once(current.database_url)
     banner()
     st.title(title)
     if caption:
         st.caption(caption)
+    sidebar_status(current)
+    return current
+
+
+@st.cache_resource(show_spinner="Loading demo data...")
+def _auto_seed_once(database_url: str) -> str:
+    """AUTO_SEED_DEMO: seed (and screen offline) once per server process when the database is empty."""
+    from talentsift.demo import seed_if_empty  # imported lazily: only hosted demos need it
+
+    with db_session() as session:
+        summary = seed_if_empty(session, settings())
+    return summary.message if summary else "already seeded"
 
 
 def sidebar_status(current: Settings) -> None:
-    """Global AI provider picker and policy summary (rendered by app.py on every page)."""
+    """AI provider picker and policy summary, shown in the sidebar of every page.
+
+    Widget state is per page in Streamlit, so the choice is kept in a separate session key.
+    """
+    options = list(PROVIDER_LABELS)
     with st.sidebar:
-        st.radio(
+        choice = st.radio(
             "AI provider",
-            options=list(PROVIDER_LABELS),
-            index=list(PROVIDER_LABELS).index(current.llm_provider),
+            options=options,
+            index=options.index(selected_provider()),
             format_func=PROVIDER_LABELS.get,
-            key="llm_provider",
+            key="llm_provider_radio",
             help="Switch to the offline client if the network or API key is unavailable. Every run records which one it used.",
         )
-        provider = selected_provider()
+        st.session_state["llm_provider"] = choice
+        provider = choice
         st.caption(describe_provider(current, provider))
         if provider == "openrouter" and not (current.openrouter_api_key and current.llm_model):
             st.error("Set OPENROUTER_API_KEY and LLM_MODEL in .env (or hosting secrets), or use the offline client.")

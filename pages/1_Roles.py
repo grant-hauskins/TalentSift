@@ -27,8 +27,7 @@ from talentsift.rubric import draft_rubric, redraft_rubric
 SAMPLE_ROLES = sorted((PROJECT_ROOT / "data" / "samples" / "roles").glob("*.json"))
 NEW_ROLE = 0
 
-settings = ui.settings()
-ui.page_header("Roles", "Define what you are hiring for. Screening only uses a rubric version you have approved.")
+settings = ui.page_setup("Roles", "Define what you are hiring for. Screening only uses a rubric version you have approved.", icon="📋")
 
 with ui.db_session() as session:
     roles = list_roles(session)
@@ -153,7 +152,7 @@ with ui.db_session() as session:
             disabled=["source", "flag"],
             column_config={
                 "id": None,  # hidden: links edited rows back to stored criteria
-                "name": st.column_config.TextColumn("Criterion", required=True, width="medium"),
+                "name": st.column_config.TextColumn("Criterion", required=True, width="large"),
                 "description": st.column_config.TextColumn("What evidence counts", width="large"),
                 "type": st.column_config.SelectboxColumn("Type", options=list(CRITERION_TYPES), required=True, default="nice_to_have"),
                 "weight": st.column_config.SelectboxColumn("Weight", options=list(CRITERION_WEIGHTS), required=True, default="medium"),

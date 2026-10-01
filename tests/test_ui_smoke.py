@@ -48,13 +48,48 @@ def open_app() -> AppTest:
     return at
 
 
-def test_empty_app_renders_every_page_with_banner(database):
+def test_empty_app_renders_every_page_with_banner_and_provider_picker(database):
     at = open_app()
     assert at.title[0].value == "TalentSift"
-    for page in PAGES:
+    for page in ["app.py", *PAGES]:
         at.switch_page(page).run()
         assert not at.exception, (page, at.exception)
-        assert any(BANNER in info.value for info in at.info), page
+        assert sum(BANNER in info.value for info in at.info) == 1, page
+        assert at.sidebar.radio[0].label == "AI provider", page
+
+
+def test_provider_choice_follows_the_manager_across_pages(database):
+    at = open_app()
+    at.sidebar.radio[0].set_value("fake").run()
+    at.switch_page("pages/3_Screen.py").run()
+    assert at.sidebar.radio[0].value == "fake"
+
+
+def test_demo_loader_and_fairness_checks_from_the_ui(database):
+    at = open_app()
+    next(b for b in at.button if b.label == "Load demo data").click().run()
+    assert not at.exception, at.exception
+    with new_session(database) as session:
+        assert seed_counts(session) == (2, 20)
+
+    at.switch_page("pages/3_Screen.py").run()
+    at.button(key="run_screening").click().run()
+    at.switch_page("pages/5_Audit.py").run()
+    at.button(key="name_swap_button").click().run()
+    assert not at.exception, at.exception
+    assert any(s.value == "Passed" for s in at.success)  # the planted name-swap pair is picked by default
+    at.button(key="consistency_button").click().run()
+    assert any(s.value.startswith("Passed: scores identical True") for s in at.success)
+
+
+def seed_counts(session):
+    from sqlmodel import func
+
+    from talentsift.models import Applicant, Role
+
+    roles = session.exec(select(func.count()).select_from(Role)).one()
+    applicants = session.exec(select(func.count()).select_from(Applicant)).one()
+    return roles, applicants
 
 
 def test_screen_run_and_reinstate_flow(seeded):

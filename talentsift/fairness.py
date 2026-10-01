@@ -158,8 +158,8 @@ def consistency_check(
         run_id=run.id,
         role_id=run.role_id,
         model=client.model,
-        provider=client.provider,
         payload={
+            "client": client.provider,
             "check": "consistency",
             "passed": report.passed,
             "scores_identical": report.scores_identical,
@@ -257,8 +257,8 @@ def name_swap_check(
         role_id=role.id,
         run_id=run.id if run else None,
         model=client.model,
-        provider=client.provider,
         payload={
+            "client": client.provider,
             "check": "name_swap",
             "passed": report.passed,
             "applicants": list(report.labels),

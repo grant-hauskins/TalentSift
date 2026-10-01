@@ -10,8 +10,11 @@ from talentsift.models import SCREENABLE_PARSE_STATUSES, Applicant, Role, Screen
 from talentsift.roles import list_roles
 from talentsift.scoring import ScreeningError, run_screening
 
-settings = ui.settings()
-ui.page_header("Screen", "One AI call per applicant at temperature 0. Cached results are reused, so re-runs are consistent and cheap.")
+settings = ui.page_setup(
+    "Screen",
+    "One AI call per applicant at temperature 0. Cached results are reused, so re-runs are consistent and cheap.",
+    icon="⚙️",
+)
 
 with ui.db_session() as session:
     roles = list_roles(session)

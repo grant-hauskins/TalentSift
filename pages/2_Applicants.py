@@ -20,10 +20,10 @@ from talentsift.parsers import supported_extensions
 SAMPLES_DIR = PROJECT_ROOT / "data" / "resumes" / "samples"
 ALL = "All batches"
 
-settings = ui.settings()
-ui.page_header(
+settings = ui.page_setup(
     "Applicants",
     "Text-based PDFs only for now. Names, contact details, addresses, links, and images are masked before any AI sees the resume.",
+    icon="📄",
 )
 
 

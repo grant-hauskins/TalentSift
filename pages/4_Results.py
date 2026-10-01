@@ -29,12 +29,12 @@ from talentsift.overrides import (
 )
 from talentsift.roles import criteria_for_version
 
-ui.page_header("Results")
+ui.page_setup("Results", icon="🏆")
 
 
-def evidence_lines(score: CriterionScore) -> str:
+def evidence_lines(score: CriterionScore, limit: int | None = None) -> str:
     lines = []
-    for item in loads(score.evidence_json, default=[]):
+    for item in loads(score.evidence_json, default=[])[:limit]:
         mark = "✓ verified" if item["verified"] else "⚠️ **not found in the resume**"
         lines.append(f"> “{item['quote']}”  \n> <small>{mark}</small>")
     return "\n\n".join(lines)
@@ -203,7 +203,7 @@ with ui.db_session() as session:
                     strong = sorted([(c, s) for c, s in rows if s.score >= 3], key=lambda cs: (-cs[1].score, cs[0].order))
                     for c, s in strong[:3]:
                         st.markdown(f"**{c.name}** · {s.score}/4")
-                        st.markdown(evidence_lines(s), unsafe_allow_html=True)
+                        st.markdown(evidence_lines(s, limit=1), unsafe_allow_html=True)
                     if not strong:
                         st.caption("No criterion scored 3 or higher.")
                 if e.summary:
