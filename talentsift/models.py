@@ -144,7 +144,6 @@ class ScreeningRun(SQLModel, table=True):
     llm_provider: str = ""  # (ext) "openrouter" or "fake"
     prompt_version: str
     batch_label: str = ""  # (ext) which batches were screened
-    purpose: str = "screening"  # (ext) screening | consistency_check | name_swap_check
     # Policy snapshot (ext): the values in force when this run made its decisions.
     auto_reject_threshold: int = 40
     top_n: int = 5
@@ -175,7 +174,8 @@ class Evaluation(SQLModel, table=True):
     fit_score: Optional[float] = None  # 0-100, computed in code; None when not scored
     must_haves_met: int = 0
     must_haves_total: int = 0  # (ext)
-    status: str = STATUS_NEEDS_REVIEW
+    status: str = STATUS_NEEDS_REVIEW  # current status (changes only through a logged override)
+    auto_status: str = STATUS_NEEDS_REVIEW  # (ext) the automated decision, kept after any override
     rank: Optional[int] = None  # 1 = best among eligible applicants; None for needs_review
     summary: str = ""
     strengths_json: str = "[]"  # (ext)

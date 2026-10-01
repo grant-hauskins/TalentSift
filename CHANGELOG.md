@@ -16,3 +16,10 @@ All notable changes to this project are documented here. The format follows
 - Provider-agnostic `LLMClient` with a validate-and-retry-once loop; OpenRouter client (OpenAI SDK, strict JSON
   schema, `require_parameters`, plain-JSON fallback, one network retry); deterministic offline fake client.
 - Versioned prompts `screen_v1` and `rubric_draft_v1`.
+- AI rubric drafting with proxy-characteristic flags; roles with immutable approved versions, draft editing,
+  duplication, discard-draft, and per-role threshold and top N.
+- Screening engine: masked-text prompts, result cache, parallel LLM calls, validate-and-retry, verbatim evidence
+  verification, fit score with must-have penalty, deterministic ranking, statuses with auto-reject guardrails,
+  `confirm` mode, job-related reasons, per-batch cost cap.
+- Overrides and one-click reinstatement with required reasons; append-only override records.
+- Fairness checks: consistency re-run on a sample and name-swap test.

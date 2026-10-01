@@ -13,6 +13,7 @@ from typing import Any, Iterable, Sequence
 
 from sqlmodel import Session, select
 
+from talentsift.llm.base import Attempt
 from talentsift.models import AuditEvent, dumps, loads, utcnow
 
 # Event types from the brief, plus a few extensions (ext) documented in docs/decisions.md.
@@ -144,3 +145,91 @@ def record_export(session: Session, *, row_count: int, filters: dict[str, Any], 
     )
     session.commit()
     return event
+
+
+def log_llm_attempts(
+    session: Session,
+    attempts: Sequence[Attempt],
+    *,
+    schema_name: str,
+    prompt_version: str,
+    model_requested: str,
+    run_id: int | None = None,
+    role_id: int | None = None,
+    applicant_id: int | None = None,
+    context: dict[str, Any] | None = None,
+    log_validation_failure: bool = True,
+) -> None:
+    """Write llm_request / llm_response (and llm_fallback, validation_failed) events for each attempt.
+
+    `context` is merged into every payload, e.g. {"display_label": "Applicant 07"} or {"check": "name_swap"}.
+    """
+    context = context or {}
+    ids = dict(run_id=run_id, role_id=role_id, applicant_id=applicant_id, prompt_version=prompt_version)
+    for attempt in attempts:
+        result = attempt.result
+        request_params = {k: v for k, v in (result.request if result else {}).items() if k != "messages"}
+        log_event(
+            session,
+            "llm_request",
+            model=model_requested,
+            input_hash=sha256_text(attempt.system + "\n" + attempt.user),
+            payload={
+                **context,
+                "attempt": attempt.number,
+                "schema": schema_name,
+                "sent_at": attempt.sent_at.isoformat(),
+                "system": attempt.system,
+                "user": attempt.user,
+                "params": request_params,
+            },
+            **ids,
+        )
+        log_event(
+            session,
+            "llm_response",
+            model=result.model_used if result else model_requested,
+            provider=result.provider_used if result else None,
+            input_hash=sha256_text(result.raw_text) if result else None,
+            payload={
+                **context,
+                "attempt": attempt.number,
+                "raw_text": result.raw_text if result else "",
+                "model_requested": model_requested,
+                "model_used": result.model_used if result else None,
+                "provider_used": result.provider_used if result else None,
+                "prompt_tokens": result.prompt_tokens if result else 0,
+                "completion_tokens": result.completion_tokens if result else 0,
+                "total_tokens": result.total_tokens if result else 0,
+                "cost_usd": result.cost_usd if result else None,
+                "used_fallback": result.used_fallback if result else False,
+                "network_retries": result.network_retries if result else 0,
+                "latency_ms": result.latency_ms if result else 0,
+                "call_error": attempt.call_error,
+                "validation_error": attempt.validation_error,
+            },
+            **ids,
+        )
+        if result and result.used_fallback:
+            log_event(
+                session,
+                "llm_fallback",
+                model=result.model_used,
+                provider=result.provider_used,
+                payload={**context, "attempt": attempt.number, "reason": result.fallback_reason},
+                **ids,
+            )
+    failed_validation = attempts and all(a.validation_error for a in attempts)
+    if log_validation_failure and failed_validation:
+        log_event(
+            session,
+            "validation_failed",
+            model=model_requested,
+            payload={
+                **context,
+                "attempts": len(attempts),
+                "errors": [a.validation_error for a in attempts],
+                "schema": schema_name,
+            },
+            **ids,
+        )

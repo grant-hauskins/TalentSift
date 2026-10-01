@@ -47,6 +47,8 @@ _TOKEN = re.compile(r"[a-z][a-z0-9+#]*(?:/[a-z0-9]+)?")
 
 
 def _stem(word: str) -> str:
+    if word.endswith("ies") and len(word) > 4:  # queries -> query
+        return word[:-3] + "y"
     for suffix in ("ing", "ed", "es", "s"):
         if word.endswith(suffix) and len(word) - len(suffix) >= 3:
             word = word[: -len(suffix)]
