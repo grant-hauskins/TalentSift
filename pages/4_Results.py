@@ -187,6 +187,12 @@ with ui.db_session() as session:
     with tabs[0]:
         if not shortlisted:
             st.info("Nobody is shortlisted in this run.")
+        automated = [e for e in shortlisted if e.auto_status == STATUS_SHORTLISTED]
+        if len(automated) > run.top_n:
+            st.caption(
+                f"{len(automated)} applicants are shortlisted instead of the top {run.top_n}: applicants tied with the "
+                "last shortlisted score are all included, so ties are never broken by upload order."
+            )
         for e in shortlisted:
             a, rows = applicants[e.applicant_id], scored_rows(e, criteria, scores_by_eval)
             with st.container(border=True):

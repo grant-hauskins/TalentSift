@@ -108,3 +108,15 @@ def test_settings_default_to_offline_fake_client():
 def test_settings_reject_invalid_mode():
     with pytest.raises(ValueError):
         Settings.from_env({"AUTO_REJECT_MODE": "sometimes"})
+
+
+def test_env_example_runs_offline_until_a_key_is_added():
+    from dotenv import dotenv_values
+
+    from talentsift.config import PROJECT_ROOT
+
+    env = {key: value or "" for key, value in dotenv_values(PROJECT_ROOT / ".env.example").items()}
+    assert Settings.from_env(env).llm_provider == "fake"
+    env["OPENROUTER_API_KEY"] = "sk-or-test"
+    settings = Settings.from_env(env)
+    assert settings.llm_provider == "openrouter" and settings.llm_model  # example model slug is filled in

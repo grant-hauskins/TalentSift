@@ -164,6 +164,8 @@ Ownership for parallel work (data, AI, UX owners) is in [CONTRIBUTING.md](CONTRI
 - **Evidence checks prove a quote exists, not that it supports the score.** Reviewers should still read them.
 - **The offline client is a keyword matcher** for tests and demos, not a real assessment.
 - **Cost cap** relies on the cost OpenRouter reports, and can overshoot by the calls already in flight.
+- **Ties enlarge the shortlist.** Applicants tied with the N-th score are all shortlisted rather than split by upload
+  order, so "top 5" can show 6 or more when scores tie ([D-009](docs/decisions.md)).
 - **Overrides belong to a run.** A new screening run makes fresh automated decisions.
 - **Single user, no authentication, local SQLite.** Planned for the final project along with OCR, DOCX, emailing
   candidates, ATS integrations, side-by-side compare, and fairness dashboards.

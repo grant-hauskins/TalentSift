@@ -66,6 +66,8 @@ Format: **ID - title** (date, decided by). Context, decision, consequences.
 - **Decision:** An applicant whose (fit score, must-haves met) equals the N-th shortlisted applicant's is also
   shortlisted, so the shortlist can exceed N on exact ties.
 - **Consequences:** Statuses never depend on upload order; rank numbers still order the list deterministically.
+  With coarse 0-4 scores, ties are common, so the shortlist can exceed N (in a stress test with 200 near-duplicate
+  resumes and N = 10, 66 tied applicants were shortlisted). The Results page says when ties enlarged the shortlist.
 
 ### D-010 - Every guardrail case goes to `needs_review`, not only would-be rejections
 - **Decision:** Failed validation, unverified evidence, partial parses, truncated input, and applicants left
