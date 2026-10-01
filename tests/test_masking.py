@@ -39,7 +39,8 @@ def test_phones_are_masked(masked, phone):
 
 
 @pytest.mark.parametrize(
-    "phone", ["312-555-0142", "+1 312 555 0142", "3125550142", "(312)555-0142", "+33 1 23 45 67 89"]
+    "phone",
+    ["312-555-0142", "+1 312 555 0142", "3125550142", "(312)555-0142", "312/555-0142", "+33 1 23 45 67 89", "020 7946 0958"],
 )
 def test_phone_formats(phone):
     assert mask_text(f"Call me at {phone} today").masked_text == "Call me at [PHONE] today"
@@ -141,3 +142,70 @@ def test_guard_raises_if_image_content_survives(monkeypatch):
     monkeypatch.setattr(masking, "_IMAGE_REMOVAL_PATTERNS", masking._IMAGE_PATTERNS[:1])  # simulate a gap
     with pytest.raises(MaskingError):
         masking.mask_text("Jane Doe\n" + "A" * 300)
+
+
+# --- Regression tests from the code review --------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        "Jane Doe jane.doe@example.com (614) 555-0101",  # contact details right-aligned on the name line
+        "Resume: Jane Doe",
+        "Resume - Jane Doe",
+        "Curriculum Vitae - Jane Doe",
+        "Resume of Jane Doe",
+        "jane.doe@example.com | (614) 555-0101\nJane Doe",  # contact bar above the name
+        "Dr. Jane Doe, PhD",
+        "Confidential\nJane Doe",  # a one-word title line above the name
+    ],
+)
+def test_name_found_in_common_header_layouts(header):
+    masked = mask_text(header + "\nSUMMARY\nJane Doe built reports. Doe led the team.").masked_text
+    assert "Jane" not in masked and "Doe" not in masked
+
+
+def test_name_bearing_links_are_masked():
+    masked = mask_text("Jane Doe\nPortfolio: JaneDoe.com, janedoe.design, linkedin /in/jane-doe").masked_text
+    for leak in ("JaneDoe", "janedoe", "jane-doe"):
+        assert leak not in masked
+
+
+def test_job_titles_particles_and_sentences_are_not_names():
+    masked = mask_text("Jane Doe Data Analyst\nSUMMARY\nData analyst. Analyst of the year.").masked_text
+    assert masked.startswith("[NAME] Data Analyst") and "Data analyst. Analyst of the year." in masked
+    assert mask_text("Lucas van Dijk\nDrove the delivery van. Dijk led.").masked_text == (
+        "[NAME]\nDrove the delivery van. [NAME] led."
+    )
+    assert find_name_words("Call me at 312-555-0142 today") == []
+    assert find_name_words("Results Driven Professional\nSUMMARY") == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Migrated 300 Google Drive accounts.",
+        "Supported IT 25000 tickets a year.",
+        "Opened 3 St. Louis stores and 12 Highway Bridges projects.",
+        "Built realtime apps with socket.io, fly.io, and ASP.NET (asp.net).",
+        "Annotated controllers with @RestController and @Override.",
+        "Sold on Amazon.com and integrated Salesforce.com.",
+    ],
+)
+def test_job_relevant_text_is_not_mistaken_for_pii(text):
+    assert mask_text("Jane Doe\n\nSUMMARY\n" + text).masked_text.endswith(text)
+
+
+def test_data_uri_does_not_swallow_following_lines():
+    masked = mask_text("Jane Doe\nPhoto data:image/png;base64,iVBORw0KGgoAAAANSUhEUg\nSKILLS\nSQL Python Tableau").masked_text
+    assert masked.endswith("[IMAGE]\nSKILLS\nSQL Python Tableau")
+
+
+def test_grad_year_masking_leaves_work_history_alone():
+    text = (
+        "Jane Doe\nEDUCATION\nB.S. Statistics, State University\n2014 - 2018\nWORK HISTORY\n"
+        "Sales Associate, Ohio State University, 2018 - 2020\nScrum Master, Acme, 2020 - 2023"
+    )
+    masked = mask_text(text, mask_grad_years=True).masked_text
+    assert "B.S. Statistics, State University\n[YEAR] - [YEAR]" in masked
+    assert "2018 - 2020" in masked and "2020 - 2023" in masked
