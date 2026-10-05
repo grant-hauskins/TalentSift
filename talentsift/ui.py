@@ -118,6 +118,9 @@ def sidebar_status(current: Settings) -> None:
     Widget state is per page in Streamlit, so the choice is kept in a separate session key.
     """
     options = list(PROVIDER_LABELS)
+    # A widget's value can only be set before it is drawn, so `switch_provider` parks the choice here.
+    if pending := st.session_state.pop("next_llm_provider", None):
+        st.session_state["llm_provider"] = st.session_state["llm_provider_radio"] = pending
     with st.sidebar:
         choice = st.radio(
             "AI provider",
@@ -131,11 +134,17 @@ def sidebar_status(current: Settings) -> None:
         provider = choice
         st.caption(describe_provider(current, provider))
         if provider == "openrouter" and not (current.openrouter_api_key and current.llm_model):
-            st.error("Set OPENROUTER_API_KEY and LLM_MODEL in .env (or hosting secrets), or use the offline client.")
+            st.error("No API key or model yet. Add them on the Settings page, or use the offline client.")
+            st.page_link("pages/6_Settings.py", label="Open Settings", icon="🔑")
         st.caption(
             f"Auto-reject mode: **{current.auto_reject_mode}** · must-have penalty: {current.must_have_penalty:g} pts · "
             f"cost cap: ${current.cost_cap_usd:.2f}/batch"
         )
+
+
+def switch_provider(provider: str) -> None:
+    """Select a provider from page code; takes effect on the next rerun."""
+    st.session_state["next_llm_provider"] = provider
 
 
 def selected_provider() -> str:

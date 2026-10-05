@@ -1,5 +1,7 @@
 """Applicants: upload or import resumes, see parse status, and preview exactly what the AI will see."""
 
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 from sqlmodel import select
@@ -8,21 +10,23 @@ from talentsift import ui
 from talentsift.config import PROJECT_ROOT
 from talentsift.ingest import (
     ADDED,
+    already_ingested,
     default_batch_name,
     ingest_folder,
     ingest_upload,
     list_batches,
     remask_applicants,
+    scan_folder,
 )
 from talentsift.models import SCREENABLE_PARSE_STATUSES, Applicant, loads
-from talentsift.parsers import supported_extensions
 
 SAMPLES_DIR = PROJECT_ROOT / "data" / "resumes" / "samples"
 ALL = "All batches"
+BROWSE_KEY = "browse_dir"
 
 settings = ui.page_setup(
     "Applicants",
-    "Text-based PDFs only for now. Names, contact details, addresses, links, and images are masked before any AI sees the resume.",
+    "PDF resumes only. Names, contact details, addresses, links, and images are masked before any AI sees the resume.",
     icon="📄",
 )
 
@@ -51,12 +55,136 @@ def show_results(results) -> None:
             st.warning(f"**{r.filename}**: {r.message}")
 
 
+def fmt_size(size: int) -> str:
+    return f"{size / 1_048_576:.1f} MB" if size >= 1_048_576 else f"{max(size, 1) / 1024:.0f} KB"
+
+
+def go_to(path: Path) -> None:
+    """Navigate the folder browser. Also syncs the path box, which can only be set before it is drawn."""
+    st.session_state[BROWSE_KEY] = str(path)
+    st.session_state["folder_path_box"] = str(path)
+
+
+def subfolders(folder: Path) -> list[Path]:
+    try:
+        return sorted((p for p in folder.iterdir() if p.is_dir() and not p.name.startswith(".")), key=lambda p: p.name.lower())
+    except OSError:
+        return []
+
+
+def folder_browser() -> Path | None:
+    """Pick a folder on this computer: type or paste a path, or click through folders."""
+    if BROWSE_KEY not in st.session_state:
+        go_to(SAMPLES_DIR)
+    current = Path(st.session_state[BROWSE_KEY]).expanduser()
+
+    def typed_path() -> None:
+        typed = Path(st.session_state["folder_path_box"].strip().strip('"')).expanduser()
+        st.session_state[BROWSE_KEY] = str(typed)
+
+    st.text_input(
+        "Folder",
+        key="folder_path_box",
+        on_change=typed_path,
+        help="Paste a folder path, or browse with the buttons below. The folder is read on the computer running TalentSift.",
+    )
+    nav = st.columns([1, 1, 1, 3])
+    nav[0].button("⬆️ Up", on_click=go_to, args=(current.parent,), disabled=current.parent == current, width="stretch")
+    nav[1].button("🏠 Home", on_click=go_to, args=(Path.home(),), width="stretch")
+    nav[2].button("🧪 Samples", on_click=go_to, args=(SAMPLES_DIR,), width="stretch")
+
+    if not current.is_dir():
+        st.error(f"Folder not found: {current}")
+        return None
+    children = subfolders(current)
+    if children:
+
+        def open_child() -> None:
+            chosen = st.session_state.get("open_subfolder")
+            st.session_state["open_subfolder"] = None
+            if chosen:
+                go_to(current / chosen)
+
+        nav[3].selectbox(
+            "Open a subfolder",
+            [c.name for c in children],
+            index=None,
+            placeholder=f"Open a subfolder ({len(children)})",
+            key="open_subfolder",
+            on_change=open_child,
+            label_visibility="collapsed",
+        )
+    return current
+
+
+def folder_import(session) -> None:
+    folder = folder_browser()
+    if folder is None:
+        return
+    try:
+        scan = scan_folder(folder)
+    except OSError as exc:
+        st.error(f"Could not read {folder}: {exc}")
+        return
+
+    included, excluded = scan.included, scan.excluded
+    duplicates = already_ingested(session, [f.path for f in included])
+    new = [f for f in included if f.path not in duplicates]
+
+    cols = st.columns(3)
+    cols[0].metric("PDFs to send", len(new), help="New PDF resumes that will be parsed, masked, and screened.")
+    cols[1].metric("Already imported", len(duplicates), help="Identical files already in TalentSift; they are skipped.")
+    cols[2].metric("Ignored (not PDF)", len(excluded), help="Only PDF files are ever read from the folder.")
+    st.caption(
+        "**What the AI receives:** only the text extracted from each PDF, after names, contact details, addresses, "
+        "links, and images are masked. The files themselves never leave this computer. Subfolders are not included."
+    )
+
+    if included:
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "file": f.name,
+                        "size": fmt_size(f.size_bytes),
+                        "will be": f"skipped: already {duplicates[f.path]}" if f.path in duplicates else "imported and screened",
+                    }
+                    for f in included
+                ]
+            ),
+            hide_index=True,
+            width="stretch",
+        )
+    else:
+        st.info("No PDF files in this folder.")
+    if excluded:
+        with st.expander(f"Files that will not be sent ({len(excluded)})"):
+            st.dataframe(
+                pd.DataFrame([{"file": f.name, "reason": f.reason} for f in excluded]),
+                hide_index=True,
+                width="stretch",
+            )
+
+    batch = st.text_input("Batch name", placeholder=f"Defaults to the folder name: {folder.name}", key="folder_batch")
+    if st.button(
+        f"Import {len(new)} PDF{'s' if len(new) != 1 else ''}",
+        type="primary",
+        disabled=not new,
+        key="import_folder",
+    ):
+        with st.spinner(f"Parsing and masking {len(new)} PDF(s)..."):
+            st.session_state.folder_results = ingest_folder(session, folder, settings=settings, batch=batch.strip() or None)
+        st.rerun()  # refresh the preview so the new files show as already imported
+    if results := st.session_state.pop("folder_results", None):
+        show_results(results)
+
+
 with ui.db_session() as session:
     upload_tab, folder_tab = st.tabs(["Upload files", "Import a folder"])
     with upload_tab:
         with st.form("upload", clear_on_submit=True):
             files = st.file_uploader(
-                "Resumes", type=[ext.lstrip(".") for ext in supported_extensions()], accept_multiple_files=True
+                "Resumes (PDF only)", type=["pdf"], accept_multiple_files=True
             )
             batch = st.text_input("Batch name", value=default_batch_name())
             submitted = st.form_submit_button("Ingest files", type="primary")
@@ -68,20 +196,7 @@ with ui.db_session() as session:
                 ]
             show_results(results)
     with folder_tab:
-        with st.form("folder"):
-            folder = st.text_input("Folder path", value=str(SAMPLES_DIR))
-            folder_batch = st.text_input("Batch name (defaults to the folder name)")
-            imported = st.form_submit_button("Import every PDF in this folder", type="primary")
-        if imported:
-            try:
-                with st.spinner("Importing..."):
-                    results = ingest_folder(session, folder, settings=settings, batch=folder_batch.strip() or None)
-                if results:
-                    show_results(results)
-                else:
-                    st.info("No supported files found in that folder.")
-            except FileNotFoundError as exc:
-                st.error(str(exc))
+        folder_import(session)
 
     st.divider()
     batches = list_batches(session)

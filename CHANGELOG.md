@@ -5,6 +5,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Settings page**: enter and store the OpenRouter API key and model in the app. Saved to the gitignored `.env`,
+  applied without a restart, shown masked, never written to the database or audit log. The sidebar links to it
+  when a key is missing.
+- **Folder browser** on Applicants: type a path or click through folders (Up, Home, Samples, subfolders). Before
+  importing, a preview shows which files will be sent, which are already imported, and which are ignored and why.
+- **Job posting import from a link** on Roles: JSON-LD `JobPosting` first, then BeautifulSoup heuristics (named
+  container, `<main>`/`<article>`, densest text block). Public http(s) hosts only; size and time limits; each import
+  logged as `posting_imported`.
+
+### Changed
+- Folder import and upload accept **PDF files only**. Files must have a `.pdf` name *and* PDF contents; hidden
+  files, empty files, and renamed non-PDFs are skipped with a reason. Subfolders are not read.
+- `httpx` and `beautifulsoup4` are now runtime dependencies.
+
 ## [0.1.0] - 2026-10-01 (MVP)
 
 ### Added

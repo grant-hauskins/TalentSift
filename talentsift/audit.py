@@ -21,6 +21,7 @@ EVENT_TYPES = (
     "rubric_drafted",
     "rubric_approved",
     "role_saved",  # (ext) role created, edited, duplicated, or versioned by the manager
+    "posting_imported",  # (ext) job posting text loaded from a web link
     "resume_ingested",
     "resume_masked",
     "run_started",  # (ext)

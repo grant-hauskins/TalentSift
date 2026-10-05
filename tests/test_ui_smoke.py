@@ -1,20 +1,30 @@
 """Headless Streamlit tests: every page renders, the banner is everywhere, and key flows work end to end."""
 
+import os
 from pathlib import Path
 
 import pytest
 from sqlmodel import select
 from streamlit.testing.v1 import AppTest
 
+from talentsift import credentials
 from talentsift.config import get_settings
 from talentsift.db import create_db_engine, init_db, new_session
 from talentsift.models import STATUS_AUTO_REJECTED, Evaluation
 from talentsift.ui import BANNER
 
 from tests.factories import MEDIUM, STRONG, WEAK, make_applicant, make_role
+from tests.pdf_factory import RESUME_LINES, text_pdf
 
 APP = str(Path(__file__).resolve().parent.parent / "app.py")
-PAGES = ["pages/1_Roles.py", "pages/2_Applicants.py", "pages/3_Screen.py", "pages/4_Results.py", "pages/5_Audit.py"]
+PAGES = [
+    "pages/1_Roles.py",
+    "pages/2_Applicants.py",
+    "pages/3_Screen.py",
+    "pages/4_Results.py",
+    "pages/5_Audit.py",
+    "pages/6_Settings.py",
+]
 
 
 @pytest.fixture
@@ -24,6 +34,7 @@ def database(tmp_path, monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "fake")
     monkeypatch.setenv("AUTO_REJECT_MODE", "automatic")
     monkeypatch.setenv("UPLOAD_DIR", str(tmp_path / "uploads"))
+    monkeypatch.setattr(credentials, "ENV_PATH", tmp_path / ".env")  # never touch the developer's .env
     get_settings.cache_clear()
     engine = create_db_engine(url)
     init_db(engine)
@@ -122,3 +133,72 @@ def test_screen_run_and_reinstate_flow(seeded):
 
     at.switch_page("pages/5_Audit.py").run()
     assert not at.exception, at.exception
+
+
+def test_settings_page_saves_and_removes_the_api_key(database, tmp_path):
+    saved = {name: os.environ.pop(name) for name in ("OPENROUTER_API_KEY", "LLM_MODEL") if name in os.environ}
+    try:
+        at = open_app()
+        at.switch_page("pages/6_Settings.py").run()
+        at.text_input[0].input("sk-or-v1-test0000key1111")
+        at.text_input[1].input("vendor/test-model")
+        at.button[0].click().run()  # the form's submit button
+        assert not at.exception, at.exception
+        assert any("Saved" in s.value for s in at.success)
+        assert "sk-or-v1-test0000key1111" in (tmp_path / ".env").read_text()
+        assert at.sidebar.radio[0].value == "openrouter"
+        assert not at.sidebar.error  # key and model are both set now
+        assert all("sk-or-v1-test0000key1111" not in m.value for m in at.metric)
+
+        next(b for b in at.button if b.label == "Remove stored key").click().run()
+        assert "OPENROUTER_API_KEY" not in (tmp_path / ".env").read_text()
+        assert at.sidebar.radio[0].value == "fake"
+    finally:
+        for name in ("OPENROUTER_API_KEY", "LLM_MODEL", "LLM_PROVIDER"):
+            os.environ.pop(name, None)
+        os.environ.update(saved)
+        os.environ["LLM_PROVIDER"] = "fake"
+
+
+def test_folder_import_previews_and_sends_only_pdfs(database, tmp_path):
+    folder = tmp_path / "resumes"
+    folder.mkdir()
+    text_pdf(folder / "a.pdf", [RESUME_LINES])
+    (folder / "b.docx").write_bytes(b"PK fake")
+    (folder / "c.pdf").write_text("not really a pdf")
+
+    at = open_app()
+    at.switch_page("pages/2_Applicants.py").run()
+    at.text_input(key="folder_path_box").set_value(str(folder)).run()
+    assert not at.exception, at.exception
+    metrics = {m.label: m.value for m in at.metric}
+    assert metrics == {"PDFs to send": "1", "Already imported": "0", "Ignored (not PDF)": "2"}
+
+    at.button(key="import_folder").click().run()
+    assert not at.exception, at.exception
+    with new_session(database) as session:
+        from talentsift.models import Applicant
+
+        assert [a.original_filename for a in session.exec(select(Applicant))] == ["a.pdf"]
+    assert {m.label: m.value for m in at.metric}["Already imported"] == "1"
+
+
+def test_roles_page_imports_a_posting_from_a_link(database, monkeypatch):
+    from talentsift import job_import
+    from talentsift.audit import list_events
+
+    def fake_import(url):
+        return job_import.ImportedPosting(url=url, title="Operations Coordinator", text="Run the warehouse. " * 20,
+                                          method="structured data")
+
+    monkeypatch.setattr(job_import, "import_posting", fake_import)
+    at = open_app()
+    at.switch_page("pages/1_Roles.py").run()
+    at.text_input[0].input("https://jobs.example.com/42")
+    next(b for b in at.button if b.label == "Load").click().run()
+    assert not at.exception, at.exception
+    assert at.text_input(key="new_title").value == "Operations Coordinator"
+    assert at.text_area(key="new_posting").value.startswith("Run the warehouse.")
+    assert any("structured data" in s.value for s in at.success)
+    with new_session(database) as session:
+        assert len(list_events(session, event_types=["posting_imported"])) == 1

@@ -26,11 +26,12 @@ the sidebar if the network fails mid-presentation.
 
 | Page | What the manager does |
 |------|-----------------------|
-| **Roles** | Paste a posting. The AI drafts 5-10 criteria (type, weight) and flags possible proxies for protected characteristics. Edit, approve, duplicate, version. Set the auto-reject threshold (default 40) and shortlist size (default 5). |
-| **Applicants** | Upload PDFs or import a folder. See parse status and toggle the masked preview: exactly what the AI sees. |
+| **Roles** | Paste a posting or load it from a job-board link. The AI drafts 5-10 criteria (type, weight) and flags possible proxies for protected characteristics. Edit, approve, duplicate, version. Set the auto-reject threshold (default 40) and shortlist size (default 5). |
+| **Applicants** | Browse to a folder of resumes. A preview lists exactly which files will be sent (PDFs only; everything else is listed with the reason it is skipped). Or upload PDFs. Toggle the masked preview: exactly what the AI sees. |
 | **Screen** | Pick an approved role and batches, run, and watch progress, tokens, and cost. |
 | **Results** | Tabs for Shortlist, Not shortlisted, Auto-rejected, Needs review. Evidence quotes, must-have checklist, reasons, overrides, one-click reinstatement (reason required), confirm-mode approval. |
 | **Audit** | Filter the append-only log, read raw prompts and replies, export CSV, run the consistency and name-swap fairness checks. |
+| **Settings** | Paste your OpenRouter API key and model. Stored in the local `.env`, shown masked, never logged. |
 
 ## How decisions are made
 
@@ -49,10 +50,27 @@ the sidebar if the network fails mid-presentation.
 
 Rationale for each rule: [docs/decisions.md](docs/decisions.md).
 
+## Import a job posting from a link
+
+On **Roles**, paste a job-posting URL and click **Load**. TalentSift fetches the page and pulls out the posting:
+
+1. **Structured data first.** Most job boards and applicant tracking systems (Greenhouse, Lever, Workable, LinkedIn,
+   Indeed, many career sites) embed a schema.org `JobPosting`; when present it is used as-is.
+2. **Then the page itself**, with BeautifulSoup: a container named like a job description, the page's
+   `<main>`/`<article>`, or the densest block of paragraph and list text, after navigation, footers, cookie
+   banners, and "similar jobs" panels are stripped.
+
+Review the loaded text before drafting the rubric. Pages that render only with JavaScript or sit behind a login
+cannot be read; the app says so, and you paste the posting instead. Only public `http(s)` addresses are fetched
+(private and local network addresses are refused, including after redirects). Each import is logged as
+`posting_imported`.
+
 ## Use a real model through OpenRouter
 
 1. Create a key at [openrouter.ai](https://openrouter.ai) and set a spending limit on it.
-2. In `.env`: `LLM_PROVIDER=openrouter`, `OPENROUTER_API_KEY=...`, `LLM_MODEL=<any OpenRouter slug>`.
+2. Open **Settings** in the app, paste the key and a model slug, and click **Save and use OpenRouter**. The key is
+   written to the local `.env` (gitignored) and applied immediately. Or edit `.env` by hand:
+   `LLM_PROVIDER=openrouter`, `OPENROUTER_API_KEY=...`, `LLM_MODEL=<any OpenRouter slug>`.
 3. Run `python scripts/seed_demo.py --reset --screen --provider openrouter`, or pick "OpenRouter" in the app sidebar.
 
 **Swap models** by changing `LLM_MODEL` only. Prefer models listed with structured-output support
