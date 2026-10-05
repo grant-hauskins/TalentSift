@@ -31,11 +31,12 @@ with ui.db_session() as session:
 
     st.subheader("Workflow")
     steps = [
-        ("pages/1_Roles.py", "1. Roles", "📋", "Paste a job posting. The AI drafts a rubric; you edit and approve it."),
-        ("pages/2_Applicants.py", "2. Applicants", "📄", "Upload PDF resumes or import a folder. Personal details are masked."),
+        ("pages/1_Roles.py", "1. Roles", "📋", "Paste a job posting or load it from a link. The AI drafts a rubric; you edit and approve it."),
+        ("pages/2_Applicants.py", "2. Applicants", "📄", "Pick a folder of PDF resumes (or upload them). Personal details are masked."),
         ("pages/3_Screen.py", "3. Screen", "⚙️", "Score a batch against an approved rubric, with a live token and cost tally."),
         ("pages/4_Results.py", "4. Results", "🏆", "Shortlist with evidence, reasons for everyone else, overrides and reinstatement."),
         ("pages/5_Audit.py", "5. Audit", "🔍", "Every step, raw prompts and replies, CSV export, and fairness checks."),
+        ("pages/6_Settings.py", "Settings", "🔑", "Add your OpenRouter API key and model to screen with a real AI model."),
     ]
     for page, label, icon, text in steps:
         left, right = st.columns([1, 4])

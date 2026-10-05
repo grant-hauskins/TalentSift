@@ -24,7 +24,7 @@ from talentsift.models import (
     Applicant,
     dumps,
 )
-from talentsift.parsers import parse_file, supported_extensions
+from talentsift.parsers import parse_file
 
 ADDED = "added"
 DUPLICATE = "duplicate"
@@ -54,6 +54,25 @@ def label_for(applicant_id: int) -> str:
     return f"Applicant {applicant_id:02d}"
 
 
+def file_sha256(path: Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def already_ingested(session: Session, paths: list[Path]) -> dict[Path, str]:
+    """Map each path whose exact bytes are already stored to that applicant's display label."""
+    hashes = {}
+    for path in paths:
+        try:
+            hashes[path] = file_sha256(path)
+        except OSError:
+            continue
+    if not hashes:
+        return {}
+    rows = session.exec(select(Applicant).where(Applicant.file_hash.in_(set(hashes.values()))))
+    labels = {a.file_hash: a.display_label for a in rows}
+    return {path: labels[h] for path, h in hashes.items() if h in labels}
+
+
 def ingest_file(
     session: Session,
     path: Path,
@@ -65,7 +84,7 @@ def ingest_file(
     """Ingest one file from disk and commit."""
     path = Path(path)
     filename = original_filename or path.name
-    file_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+    file_hash = file_sha256(path)
 
     existing = session.exec(select(Applicant).where(Applicant.file_hash == file_hash)).first()
     if existing is not None:
@@ -151,6 +170,82 @@ def ingest_upload(
     return ingest_file(session, stored, batch=batch, settings=settings, original_filename=Path(filename).name)
 
 
+PDF_EXTENSION = ".pdf"
+PDF_MAGIC = b"%PDF-"
+
+
+@dataclass
+class FolderFile:
+    """One file found in a folder, and whether it will be imported."""
+
+    path: Path
+    size_bytes: int
+    included: bool
+    reason: str  # why it is skipped, or "" when included
+
+    @property
+    def name(self) -> str:
+        return self.path.name
+
+
+@dataclass
+class FolderScan:
+    """What a folder import would do, shown to the manager before anything is ingested."""
+
+    folder: Path
+    files: list[FolderFile]
+
+    @property
+    def included(self) -> list[FolderFile]:
+        return [f for f in self.files if f.included]
+
+    @property
+    def excluded(self) -> list[FolderFile]:
+        return [f for f in self.files if not f.included]
+
+
+def is_pdf(path: Path) -> bool:
+    """True for a real PDF: a `.pdf` name and PDF bytes (a renamed Word file or image fails the check)."""
+    if path.suffix.lower() != PDF_EXTENSION:
+        return False
+    try:
+        with path.open("rb") as handle:
+            # The spec allows a little junk before the header; real files almost always start with it.
+            return PDF_MAGIC in handle.read(1024)
+    except OSError:
+        return False
+
+
+def scan_folder(folder: Path) -> FolderScan:
+    """List a folder (not recursive) and decide which files would be imported: only real PDFs.
+
+    Nothing is read beyond the first kilobyte of each file, so this is safe to call on every rerun.
+    """
+    folder = Path(folder).expanduser()
+    if not folder.is_dir():
+        raise FileNotFoundError(f"Folder not found: {folder}")
+    files = []
+    for path in sorted(folder.iterdir(), key=lambda p: p.name.lower()):
+        if not path.is_file():
+            continue
+        try:
+            size = path.stat().st_size
+        except OSError:
+            size = 0
+        if path.name.startswith("."):
+            included, reason = False, "hidden or system file"
+        elif path.suffix.lower() != PDF_EXTENSION:
+            included, reason = False, f"not a PDF ({path.suffix.lower() or 'no extension'})"
+        elif size == 0:
+            included, reason = False, "empty file"
+        elif not is_pdf(path):
+            included, reason = False, "named .pdf but the contents are not a PDF"
+        else:
+            included, reason = True, ""
+        files.append(FolderFile(path=path, size_bytes=size, included=included, reason=reason))
+    return FolderScan(folder=folder, files=files)
+
+
 def ingest_folder(
     session: Session,
     folder: Path,
@@ -158,14 +253,13 @@ def ingest_folder(
     settings: Settings,
     batch: str | None = None,
 ) -> list[IngestResult]:
-    """Import every supported file in a folder (not recursive), in filename order."""
-    folder = Path(folder).expanduser()
-    if not folder.is_dir():
-        raise FileNotFoundError(f"Folder not found: {folder}")
-    batch = batch or folder.name
-    extensions = supported_extensions()
-    files = sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in extensions)
-    return [ingest_file(session, path, batch=batch, settings=settings) for path in files]
+    """Import every PDF in a folder (not recursive), in filename order. Other files are never read.
+
+    Only the masked text extracted from each PDF ever reaches the model, never the file itself.
+    """
+    scan = scan_folder(folder)
+    batch = batch or scan.folder.name
+    return [ingest_file(session, f.path, batch=batch, settings=settings) for f in scan.included]
 
 
 def list_batches(session: Session) -> list[str]:

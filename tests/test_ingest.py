@@ -6,8 +6,17 @@ import pytest
 from sqlmodel import select
 
 from talentsift.audit import list_events
-from talentsift.ingest import DUPLICATE, ingest_folder, ingest_upload, list_batches, remask_applicants
-from talentsift.models import PARSE_NEEDS_OCR, PARSE_PARSED, PARSE_UNSUPPORTED, Applicant
+from talentsift.ingest import (
+    DUPLICATE,
+    already_ingested,
+    ingest_folder,
+    ingest_upload,
+    is_pdf,
+    list_batches,
+    remask_applicants,
+    scan_folder,
+)
+from talentsift.models import PARSE_NEEDS_OCR, PARSE_PARSED, Applicant
 
 from tests.pdf_factory import RESUME_LINES, scanned_pdf, text_pdf
 
@@ -24,12 +33,12 @@ def folder(tmp_path):
     return folder
 
 
-def test_folder_import_records_every_supported_file(session, settings, folder):
+def test_folder_import_reads_only_pdfs(session, settings, folder):
     results = ingest_folder(session, folder, settings=settings)
-    assert [r.filename for r in results] == ["01_casey.pdf", "02_other.pdf", "03_scan.pdf", "04_resume.docx"]
+    assert [r.filename for r in results] == ["01_casey.pdf", "02_other.pdf", "03_scan.pdf"]
     statuses = [r.parse_status for r in results]
-    assert statuses == [PARSE_PARSED, PARSE_PARSED, PARSE_NEEDS_OCR, PARSE_UNSUPPORTED]
-    assert [r.screenable for r in results] == [True, True, False, False]
+    assert statuses == [PARSE_PARSED, PARSE_PARSED, PARSE_NEEDS_OCR]
+    assert [r.screenable for r in results] == [True, True, False]
     assert "OCR" in results[2].message
     assert list_batches(session) == ["batch-a"]
 
@@ -48,7 +57,7 @@ def test_duplicates_are_skipped(session, settings, folder):
     ingest_folder(session, folder, settings=settings)
     again = ingest_folder(session, folder, settings=settings)
     assert all(result.outcome == DUPLICATE for result in again)
-    assert len(session.exec(select(Applicant)).all()) == 4
+    assert len(session.exec(select(Applicant)).all()) == 3
 
 
 def test_upload_is_saved_and_ingested(session, settings, tmp_path):
@@ -63,8 +72,8 @@ def test_upload_is_saved_and_ingested(session, settings, tmp_path):
 def test_ingest_writes_audit_events_without_pii(session, settings, folder):
     ingest_folder(session, folder, settings=settings)
     events = list_events(session, event_types=["resume_ingested", "resume_masked"])
-    assert [e.event_type for e in events].count("resume_ingested") == 4
-    # The scanned PDF and the DOCX stub produce no text, so only the two text PDFs are masked.
+    assert [e.event_type for e in events].count("resume_ingested") == 3
+    # The scanned PDF produces no text, so only the two text PDFs are masked.
     assert [e.event_type for e in events].count("resume_masked") == 2
     for event in events:
         assert "casey" not in event.payload_json.lower()
@@ -83,3 +92,46 @@ def test_remask_applies_grad_year_flag(session, settings, folder):
     assert changed == 1  # only Casey's resume has an education section with a year
     applicant = session.exec(select(Applicant).where(Applicant.original_filename == "01_casey.pdf")).one()
     assert "Graduated [YEAR]" in applicant.masked_text
+
+
+def test_scan_folder_explains_what_will_and_will_not_be_sent(folder):
+    (folder / "05_renamed.pdf").write_bytes(b"PK this is really a Word file")
+    (folder / "06_empty.pdf").write_bytes(b"")
+    (folder / "._01_casey.pdf").write_bytes(b"%PDF-1.4 macOS resource fork")
+    (folder / "subfolder").mkdir()
+    text_pdf(folder / "subfolder" / "nested.pdf", [RESUME_LINES])
+
+    scan = scan_folder(folder)
+    assert [f.name for f in scan.included] == ["01_casey.pdf", "02_other.pdf", "03_scan.pdf"]
+    reasons = {f.name: f.reason for f in scan.excluded}
+    assert reasons == {
+        "._01_casey.pdf": "hidden or system file",
+        "04_resume.docx": "not a PDF (.docx)",
+        "05_renamed.pdf": "named .pdf but the contents are not a PDF",
+        "06_empty.pdf": "empty file",
+        "notes.txt": "not a PDF (.txt)",
+    }
+    assert all(f.size_bytes > 0 for f in scan.included)
+
+
+def test_renamed_non_pdf_is_never_ingested(session, settings, folder):
+    (folder / "05_renamed.pdf").write_bytes(b"PK this is really a Word file")
+    results = ingest_folder(session, folder, settings=settings)
+    assert "05_renamed.pdf" not in [r.filename for r in results]
+
+
+def test_is_pdf_checks_extension_and_contents(tmp_path):
+    good = text_pdf(tmp_path / "a.PDF", [RESUME_LINES])
+    fake = tmp_path / "b.pdf"
+    fake.write_text("hello")
+    other = tmp_path / "c.txt"
+    other.write_bytes(good.read_bytes())
+    assert is_pdf(good) and not is_pdf(fake) and not is_pdf(other)
+
+
+def test_already_ingested_maps_duplicates_to_labels(session, settings, folder):
+    ingest_folder(session, folder, settings=settings)
+    text_pdf(folder / "07_new.pdf", [["Brand new resume text", "SKILLS", "Forklift, inventory"] * 5])
+    found = already_ingested(session, [f.path for f in scan_folder(folder).included])
+    assert sorted(p.name for p in found) == ["01_casey.pdf", "02_other.pdf", "03_scan.pdf"]
+    assert all(label.startswith("Applicant ") for label in found.values())

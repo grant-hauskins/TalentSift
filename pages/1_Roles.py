@@ -1,4 +1,4 @@
-"""Roles: paste a posting -> AI-drafted rubric -> edit -> approve. Thresholds, duplication, versions."""
+"""Roles: paste or import a posting -> AI-drafted rubric -> edit -> approve. Thresholds, duplication, versions."""
 
 import json
 
@@ -6,8 +6,9 @@ import pandas as pd
 import streamlit as st
 
 from talentsift import ui
-from talentsift.audit import event_payload, list_events
+from talentsift.audit import event_payload, list_events, log_event, sha256_text
 from talentsift.config import PROJECT_ROOT
+from talentsift.job_import import JobImportError, import_posting
 from talentsift.models import CRITERION_TYPES, CRITERION_WEIGHTS
 from talentsift.roles import (
     CriterionInput,
@@ -52,6 +53,39 @@ with ui.db_session() as session:
                     st.session_state.new_title = profile["title"]
                     st.session_state.new_posting = profile["posting_text"]
                     st.rerun()
+
+        st.markdown("**Import a posting from a link**")
+        with st.form("import_posting"):
+            link_col, button_col = st.columns([5, 1], vertical_alignment="bottom")
+            url = link_col.text_input(
+                "Job posting link",
+                placeholder="https://boards.example.com/jobs/12345",
+                help="Works with most job boards and career sites. If a page cannot be read, paste the posting below.",
+            )
+            fetch_clicked = button_col.form_submit_button("Load", width="stretch")
+        if fetch_clicked:
+            try:
+                with st.spinner("Loading the page and finding the job description..."):
+                    imported = import_posting(url)
+            except JobImportError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state.new_title = imported.title
+                st.session_state.new_posting = imported.text
+                st.session_state.import_note = (
+                    f"Loaded {len(imported.text):,} characters from {imported.url} (found via {imported.method}). "
+                    "Check the text below and trim anything that is not part of the posting."
+                )
+                log_event(
+                    session,
+                    "posting_imported",
+                    input_hash=sha256_text(imported.text),
+                    payload={"url": imported.url, "method": imported.method, "chars": len(imported.text)},
+                )
+                session.commit()
+                st.rerun()
+        if note := st.session_state.pop("import_note", None):
+            st.success(note)
 
         with st.form("new_role"):
             title = st.text_input("Role title (optional; the AI proposes one)", key="new_title")
