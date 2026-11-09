@@ -1,12 +1,17 @@
-"""Candidate versions: saved, approved resume versions and a side-by-side comparison."""
+"""Candidate versions: saved versions, side-by-side comparison, A/B scoring against a role, and suggestions."""
 
 import pandas as pd
 import streamlit as st
 
 from talentsift import ui
+from talentsift.candidates import CandidateError, fact_views, list_facts
 from talentsift.drafting import compare_versions, delete_version, list_versions, version_stats
+from talentsift.models import CATEGORY_LABELS
+from talentsift.suggestions import LABELS as SUGGESTION_LABELS
+from talentsift.suggestions import suggest
+from talentsift.version_scoring import MAX_VERSIONS, score_versions
 
-ui.candidate_page_setup(
+settings = ui.candidate_page_setup(
     "Saved versions",
     "Every version here passed the no-new-facts check and was approved by you.",
     icon="🗂️",
@@ -64,6 +69,96 @@ with ui.db_session() as session:
             if not comparison.identical:
                 with st.expander("Line-by-line differences"):
                     st.code("\n".join(comparison.diff), language="diff")
+
+    # --- A/B scoring and suggestions -----------------------------------------------------------------
+    st.subheader("Score versions against a role (A/B)")
+    st.caption(
+        "See which version matches a job description best. The posting is turned into criteria once, every version "
+        "is scored on the same criteria, and the fit score is calculated in code."
+    )
+    default_pick = ids[-min(2, len(ids)):]
+    with st.form("ab_form"):
+        picked = st.multiselect(f"Versions to score (up to {MAX_VERSIONS})", ids, default=default_pick, format_func=name)
+        latest = by_id[ids[-1]]
+        ab_title = st.text_input("Role", value=latest.target_role_title)
+        ab_text = st.text_area("Job description", value=latest.target_role_text, height=180)
+        ab_clicked = st.form_submit_button("Score these versions", type="primary")
+    if ab_clicked:
+        client = ui.get_client()
+        if client is not None:
+            try:
+                with st.spinner("Reading the job description and scoring each version..."):
+                    st.session_state.candidate_ab = score_versions(
+                        session, profile, [by_id[i] for i in picked], client, settings, role_title=ab_title, role_text=ab_text
+                    )
+            except CandidateError as exc:
+                st.error(str(exc))
+
+    result = st.session_state.get("candidate_ab")
+    if result is not None and all(s.version.id in by_id for s in result.scores):
+        best = result.best
+        if not best:
+            st.error("None of the versions could be scored: " + "; ".join(s.error for s in result.scores))
+        elif len(result.scored) == 1:
+            st.info(f"'{best[0].version.label}' scores {best[0].fit_score:.1f} out of 100 for this role.")
+        elif len(best) > 1:
+            st.info("These versions tie at " + f"{best[0].fit_score:.1f}: " + ", ".join(f"'{s.version.label}'" for s in best) + ".")
+        else:
+            st.success(f"'{best[0].version.label}' scores best for this role: {best[0].fit_score:.1f} out of 100.", icon="🏁")
+        st.caption(
+            f"An estimate from {result.model}, using {len(result.criteria)} criteria read from the job description and equal "
+            "weights for skills, education, certifications, and experience. An employer sets their own criteria and "
+            "weights, so this shows which version fits the posting better, not whether you will be shortlisted."
+        )
+
+        rows = []
+        for item in result.scores:
+            row = {"Version": item.version.label, "Fit score": "—" if item.fit is None else f"{item.fit_score:.1f}"}
+            for part in (item.fit.breakdown() if item.fit else []):
+                row[CATEGORY_LABELS[part["category"]]] = "—" if part["score"] is None else f"{part['score']:.0f}"
+            if item.fit:
+                row["Must-haves met"] = f"{item.fit.must_haves_met}/{item.fit.must_haves_total}"
+            if item.error:
+                row["Note"] = f"Not scored: {item.error}"
+            elif item.unverified:
+                row["Note"] = f"{item.unverified} score(s) rest on quotes not found in the version"
+            rows.append(row)
+        st.dataframe(pd.DataFrame(rows).fillna(""), hide_index=True, width="stretch")
+
+        with st.expander("Scores by criterion"):
+            table = []
+            for criterion in result.criteria:
+                row = {
+                    "Criterion": criterion.name,
+                    "Category": CATEGORY_LABELS[criterion.category],
+                    "Type": criterion.type.replace("_", " "),
+                }
+                for item in result.scored:
+                    line = next(l for l in item.lines if l.criterion.id == criterion.id)
+                    row[item.version.label] = f"{line.score}/4"
+                table.append(row)
+            st.dataframe(pd.DataFrame(table), hide_index=True, width="stretch")
+
+        st.markdown("**Suggestions**")
+        st.caption(
+            "Drawn from the scores above and from your own core facts. They never add a skill, credential, or experience: "
+            "where your facts do not cover something, the suggestion says so."
+        )
+        facts = fact_views(list_facts(session, profile.id))
+        for item in result.scored:
+            suggestions = suggest(item, facts)
+            with st.expander(f"{item.version.label}: {len(suggestions)} suggestion(s)", expanded=item in best):
+                if not suggestions:
+                    st.write("No criterion scored low. Nothing to suggest.")
+                for suggestion in suggestions:
+                    tag = "must-have" if suggestion.must_have else "nice to have"
+                    st.markdown(
+                        f"**{suggestion.criterion}** · {suggestion.score}/4 · {tag} · "
+                        f"{CATEGORY_LABELS[suggestion.category]}  \n*{SUGGESTION_LABELS[suggestion.kind]}.* {suggestion.text}"
+                    )
+                    for fact_line in suggestion.fact_lines:
+                        st.markdown(f"> {fact_line}")
+        st.page_link("pages/7_Candidate_Profile.py", label="Edit your core facts", icon="👤")
 
     st.subheader("Open a version")
     chosen = by_id[st.selectbox("Version", ids, index=len(ids) - 1, format_func=name, key="open_version")]

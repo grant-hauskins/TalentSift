@@ -336,6 +336,19 @@ def test_candidate_flow_profile_facts_draft_approve_save_compare(database):
     assert list(at.dataframe[0].value["Version"]) == ["BI", "Dashboards"]
     assert any("line(s) only in A" in c.value for c in at.caption)  # the two versions order the bullets differently
 
+    # A/B scoring and suggestions on the same page.
+    labelled(at.text_area, "Job description").set_value(
+        "Analyst\nRequirements:\n- Tableau dashboards for finance\n- Snowflake data warehouse experience\n"
+        "- SQL queries to analyze sales\nNice to have:\n- Python with pandas\n- Forecasting models"
+    )
+    labelled(at.button, "Score these versions").click().run()
+    assert not at.exception, at.exception
+    assert not at.error, [e.value for e in at.error]
+    scores = next(d.value for d in at.dataframe if "Fit score" in d.value.columns)
+    assert list(scores["Version"]) == ["BI", "Dashboards"] and all(float(v) > 0 for v in scores["Fit score"])
+    assert any("equal weights" in c.value for c in at.caption)
+    assert any("Snowflake data warehouse experience" in m.value and "Not in your core facts" in m.value for m in at.markdown)
+
     # Closing the profile and returning with the code brings everything back.
     at.switch_page(CANDIDATE_PAGES[0]).run()
     labelled(at.button, "Close my profile on this device").click().run()

@@ -45,7 +45,7 @@ the sidebar if the network fails mid-presentation.
 |------|-------------------------|
 | **Candidate Profile** | Read and accept the AI notice, then enter core facts: skills, education, certifications, experience. An access code (shown once) reopens the profile. Delete everything at any time. |
 | **Candidate Draft** | Paste a job description. The assistant drafts from the facts only; the **no-new-facts check** runs on every line. Read the draft, tick the approval, and save it as a named version. |
-| **Candidate Versions** | List, open, download, and delete saved versions. Compare any two side by side. |
+| **Candidate Versions** | List, open, download, and delete saved versions. Compare any two side by side. **Score versions against a job description (A/B)** and get **suggestions** drawn from your own facts. |
 
 Candidate profiles are separate from employer data. Employers cannot see them; candidates cannot see roles,
 applicants, or results. How the check works, and its limits: [docs/drafting_guard.md](docs/drafting_guard.md).
@@ -190,7 +190,7 @@ pages/                 Employer: Roles, Applicants, Screen, Results, Audit, Sett
                        Candidate: Candidate Profile, Candidate Draft, Candidate Versions
 talentsift/            config, db, models, schemas, parsers/, masking, ingest, llm/, prompts, model_catalog,
                        rubric, roles, scoring, overrides, fairness, audit, demo, backup, ui,
-                       candidates, guard, draft_template, drafting, textutil
+                       candidates, guard, draft_template, drafting, version_scoring, suggestions, textutil
 prompts/               screen_v1.md, rubric_draft_v2.md, resume_draft_v1.md (versioned; never edit in place)
 scripts/               make_sample_resumes.py, seed_demo.py, backup.py
 data/resumes/samples/  26 fictional resumes (everything else in data/ is gitignored)
@@ -204,7 +204,7 @@ Ownership for parallel work (data, AI, UX owners) is in [CONTRIBUTING.md](CONTRI
 ## Process artifacts (SDLC)
 
 - [docs/plan.md](docs/plan.md): plan, WBS, file tree, build sequence, risks
-- [docs/requirements.md](docs/requirements.md): FR-1..FR-44, NFR-1..NFR-15
+- [docs/requirements.md](docs/requirements.md): FR-1..FR-46, NFR-1..NFR-15
 - [docs/prototype_audit.md](docs/prototype_audit.md): SOW gap analysis and the defect backlog
 - [docs/drafting_guard.md](docs/drafting_guard.md), [docs/employer_upgrade_design.md](docs/employer_upgrade_design.md),
   [docs/candidate_wireframes.md](docs/candidate_wireframes.md): design
@@ -229,6 +229,9 @@ Ownership for parallel work (data, AI, UX owners) is in [CONTRIBUTING.md](CONTRI
 - **The no-new-facts check compares words, not meaning.** It blocks new skills, tools, numbers, credentials, and
   posting terms, but a misleading sentence built only from the candidate's own words can pass. That is why the
   candidate must approve every draft. Details: [docs/drafting_guard.md](docs/drafting_guard.md).
+- **A/B scores are estimates.** Versions are scored on criteria read from the pasted job description with equal
+  category weights. A real employer sets their own. Suggestions match facts to requirements by keywords, so a
+  fact worded very differently from the posting can be reported as a gap.
 - **Candidate access codes cannot be recovered**, and anyone with the code can open the profile. There are no
   accounts in the MVP.
 - **Model ids in the Settings list are unverified** against OpenRouter's live catalog. Check them before release.
@@ -239,7 +242,6 @@ Ownership for parallel work (data, AI, UX owners) is in [CONTRIBUTING.md](CONTRI
   order, so "top 5" can show 6 or more when scores tie ([D-009](docs/decisions.md)).
 - **Overrides belong to a run.** A new screening run makes fresh automated decisions.
 - **No authentication, local SQLite, one employer organization per install.** Deferred past the Nov 18
-  presentation: DOCX, OCR, a per-run model picker, scoring candidate versions against a role (A/B), improvement
-  suggestions, and PDF export. Production roadmap: accounts, managed database, hosted subscription.
+  presentation: DOCX, OCR, a per-run model picker, and PDF export. Production roadmap: accounts, managed database, hosted subscription.
 - **Live OpenRouter run**: the client is verified against mocked HTTP in the test suite; run the OpenRouter
   command above with your key to complete the live check.

@@ -217,3 +217,24 @@ founders' agreement at the next status meeting, like any other sponsor-level cal
 - **Decision:** Both sample postings gained education, experience, and certification lines, and the sample roles
   ship with unequal weights. Six fictional resumes were added (26 in total). The sample roles' auto-reject
   threshold moved from 40 to 35 so the documented shortlists and borderline groups stay the same.
+
+### D-034 - A/B scoring reuses the employer engine on the candidate's own posting (2026-11-09, proposed)
+- **Context:** The SOW promises "A/B testing of resume versions against a role" and says candidates have no
+  access to employer data. The sprint plan had deferred this (baseline task 6.4); Grant asked for it to be built.
+- **Decision:** The candidate pastes a job description. It becomes criteria once (proxy-flagged criteria are
+  dropped), and each chosen version is scored on those criteria with the screening prompt and
+  `compute_fit_score`, using equal category weights. Nothing is read from or written to employer tables, and the
+  results are not stored.
+- **Consequences:** The score is an estimate: a real employer has their own criteria and weights, and the page
+  says so. Each comparison costs one call for the criteria plus one per version. Because results are not stored,
+  a page reload in a new browser session loses them.
+
+### D-035 - Suggestions are written by code, not by the model (2026-11-09, proposed)
+- **Context:** The SOW requires suggestions "with no added skills, credentials, or experience". The risk register's
+  fallback for baseline task 6.5 was a weakest-criteria list.
+- **Decision:** For each criterion scored 0-2, code looks for the candidate's own fact lines that share at least
+  half of the criterion's key terms, and says one of three things: use a fact this version left out, add real
+  detail to a fact already shown, or "nothing in your core facts shows this".
+- **Consequences:** A suggestion cannot invent anything, so it needs no guard. Matching is by keywords, so it can
+  miss a fact worded very differently from the posting and report a gap that the candidate can close by
+  rewording a fact. It never suggests wording.

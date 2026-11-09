@@ -1,6 +1,6 @@
 # Prototype audit and defect backlog (T03, WBS 2.1)
 
-**Bottom line:** the v1 prototype met its own requirements but missed four of the eight SOW features, and it had
+**Bottom line:** the v1 prototype met its own requirements but missed four of the eight SOW features (all eight are now built), and it had
 one serious defect: names, street addresses, and ZIP codes survived masking in common resume layouts. All gaps
 on the Mission Control backlog are closed in this build. Four low-severity defects are deferred, with reasons.
 
@@ -17,8 +17,8 @@ reproduced before it was fixed, and each fix has a regression test.
 | Names, street addresses, ZIP codes removed | Partial: see D-01, D-02 | Hardened; unmasked names never sent | T16 |
 | Ranked shortlist with a score breakdown | Ranked, per-criterion only | Per-category breakdown for every candidate | T18 |
 | Drafting anchored to core facts | Missing | Done | T20, T21 |
-| A/B testing of versions against a role | Missing | Save and compare only; scoring versions is deferred | T22 |
-| Improvement suggestions | Missing | Deferred past Nov 18 (baseline 6.5) | none |
+| A/B testing of versions against a role | Missing | Done: save, compare, and score versions against a pasted job description | T22, baseline 6.4 |
+| Improvement suggestions | Missing | Done: written by code from the score breakdown and the candidate's own facts | baseline 6.5 |
 
 ## Defects
 

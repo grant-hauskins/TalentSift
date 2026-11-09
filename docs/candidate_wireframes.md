@@ -84,6 +84,15 @@ wording instead. The approval box is empty again for every new draft.
 |   | version A text             |  | version B text             |               |
 |   +----------------------------+  +----------------------------+               |
 |   > Line-by-line differences                                                   |
+| Score versions against a role (A/B)                                            |
+|   Versions [v v]   Role [________]   Job description [..........]              |
+|   ( Score these versions )                                                     |
+|   [flag] 'Analyst' scores best for this role: 84.8 out of 100.                 |
+|   Version | Fit score | Skills | Education | Certifications | Experience       |
+|   > Scores by criterion                                                        |
+|   Suggestions                                                                  |
+|   > Analyst: 2 suggestion(s)   (in your facts but left out / thin / not in     |
+|                                 your core facts)                               |
 | Open a version [v]   ( Download as text )   ( Delete 'name' )                  |
 ```
 
@@ -94,4 +103,5 @@ wording instead. The approval box is empty again for every new draft.
 2. **Access code instead of accounts.** Shown once, cannot be recovered.
 3. **The AI provider switch is visible on candidate pages** (same sidebar as the employer side). Fine for a
    demo; a hosted product would hide it.
-4. **Compare shows text differences only.** Scoring versions against a role (A/B) is deferred past Nov 18.
+4. **A/B scores are an estimate.** The Versions page scores versions against a pasted job description with equal
+   category weights and says so. It also lists suggestions drawn from the candidate's own facts.
