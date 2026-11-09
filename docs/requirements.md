@@ -3,7 +3,9 @@
 Numbered requirements for the TalentSift MVP. Each one maps to modules and tests in
 [traceability.md](traceability.md). Status values: **Done** (built and tested), **Planned** (final project).
 
-The user is always a hiring manager, never an applicant.
+FR-1 to FR-28 and FR-42 to FR-44 are the employer side, where the user is a hiring manager or recruiter. FR-34 to FR-41 are the
+candidate side, where the user is a job candidate working on their own resume. The two sides share the scoring
+categories and the LLM layer, and nothing else: neither can see the other's data.
 
 ## Functional requirements
 
@@ -17,11 +19,11 @@ The user is always a hiring manager, never an applicant.
 | FR-6 | Resumes can be ingested by multi-file upload or by importing every PDF in a folder path. The app stores the original filename, file hash, extracted text, masked text, and parse status. Duplicate files are skipped. | Done |
 | FR-7 | A PDF that yields almost no text is marked `needs_ocr` and skipped with a clear message. A PDF with some text-less scanned pages is marked `partial`. | Done |
 | FR-8 | New file formats plug in through a parser registry without changes to scoring code. DOCX has a stub parser. | Done |
-| FR-9 | Before scoring, the app masks names (first-line heuristic plus every later occurrence), emails, phone numbers, street addresses including ZIP codes, URLs and social links, and image content. Graduation years are masked only when `MASK_GRAD_YEARS=true`. | Done |
+| FR-9 | Before scoring, the app masks names (found in the header block, plus every later occurrence), emails, phone numbers, street addresses including ZIP codes, URLs and social links, and image content. Graduation years are masked only when `MASK_GRAD_YEARS=true`. | Done |
 | FR-10 | For a chosen approved role and batch, the app scores every screenable resume against every criterion with one LLM call per applicant at temperature 0, using a versioned prompt. | Done |
 | FR-11 | LLM output is validated against a schema. On failure the app retries once, then logs `validation_failed` and sets the applicant to `needs_review`. | Done |
 | FR-12 | Every evidence quote must appear in the masked resume text (case and whitespace normalized). Unverified quotes are flagged in the UI, logged as `evidence_unverified`, and block auto-rejection. | Done |
-| FR-13 | The fit score (0-100) is computed in code as a weighted average of criterion scores (high=3, medium=2, low=1). Each must-have scored 0-1 subtracts `MUST_HAVE_PENALTY` points (default 15, floor 0). | Done |
+| FR-13 | The fit score (0-100) is computed in code from criterion scores (high=3, medium=2, low=1) combined by category weights (FR-31). Each must-have scored 0-1 subtracts `MUST_HAVE_PENALTY` points (default 15, floor 0). | Done |
 | FR-14 | Ranking is deterministic: fit score, then must-haves met, then applicant id. Never by name. | Done |
 | FR-15 | Statuses: top N eligible applicants are `shortlisted`; applicants below the threshold are `auto_rejected` (subject to guardrails); everything else is `not_shortlisted`; guardrail cases are `needs_review`. | Done |
 | FR-16 | Auto-reject guardrails: never auto-reject an applicant whose evaluation failed validation, has unverified evidence, or was not fully parsed. `AUTO_REJECT_MODE` is `automatic` (default) or `confirm` (manager approves the batch first). | Done |
@@ -36,7 +38,23 @@ The user is always a hiring manager, never an applicant.
 | FR-25 | A deterministic offline client lets the app run, demo, and test without network access. | Done |
 | FR-26 | Every page shows the banner: "AI recommendations and auto-rejections are logged and reversible. Review results before contacting applicants." | Done |
 | FR-27 | Scripts generate 20 fictional sample resumes and 2 role profiles, and seed a demo database. | Done |
-| FR-28 | DOCX and OCR ingestion, authentication, multi-user roles, emailing candidates, ATS integrations, side-by-side compare, fairness dashboards. | Planned |
+| FR-28 | DOCX and OCR ingestion, accounts and per-role permissions, a per-run model picker on the Screen page, A/B scoring of candidate resume versions against a role, improvement suggestions from the score breakdown, PDF export of candidate versions, emailing candidates, ATS integrations. | Planned |
+| FR-29 | Every criterion belongs to one category: `skills`, `education`, `certifications`, or `experience`. The AI draft proposes a category and the manager can change it. | Done |
+| FR-30 | The manager sets a weight (0-100) for each category on the Roles page. Only relative size matters. Categories with no criteria are ignored. At least one category that has criteria must have a weight above 0. Weights are part of the rubric: changing them on an approved version creates a new draft version. | Done |
+| FR-31 | Fit score = sum over the categories in use of (category share x category score), minus the must-have penalty. Category score = weighted average of that category's 0-4 criterion scores, scaled to 0-100. Category share = its weight divided by the total weight of the categories in use. | Done |
+| FR-32 | Every scored applicant has a stored score breakdown (per category: score, employer weight, points). Results show it for every candidate, and each screening run records the weights it used. | Done |
+| FR-33 | The employer chooses the AI model used for scoring from a short list on the Settings page (Claude is the default) or enters any OpenRouter model id. Every run records its model; cached scores are kept per model. | Done |
+| FR-34 | A candidate starts a profile only after reading and accepting the AI notice. The profile is reached with an access code shown once; only its hash is stored. There are no accounts. | Done |
+| FR-35 | A candidate enters core facts in the four categories (title, organization, dates, details), and can edit or remove any of them. Location is city and state only. | Done |
+| FR-36 | The drafting assistant drafts a resume for a pasted job description from the core facts. The model never receives the candidate's name or contact details. Job titles, employers, schools, degrees, certifications, and dates are printed from the facts by code, never written by the model. | Done |
+| FR-37 | A no-new-facts guard checks every draft in code: listed skills must appear in the facts word for word; numbers must appear in the same fact; named terms must match exactly; words taken from the job posting, and credential or seniority words, are blocked unless the facts contain them. Rules: `docs/drafting_guard.md`. | Done |
+| FR-38 | A draft that fails the guard is never shown as ready. The model gets one retry with the list of problems; after a second failure, or if the AI is unavailable, the assistant arranges the candidate's own wording instead. | Done |
+| FR-39 | Nothing is saved until the candidate ticks an approval for that draft and names the version. The guard runs again at save time against the current facts. | Done |
+| FR-40 | A candidate can list saved versions, open, download, and delete them, and compare any two side by side with a line-by-line difference. | Done |
+| FR-41 | A candidate can delete their profile, facts, and versions. Candidate tables have no link to employer tables, candidate pages never read employer data, and audit events for candidate activity carry ids, counts, and hashes only. | Done |
+| FR-42 | A readable resume whose name could not be found and masked is not sent to the model; it goes to `needs_review` with the reason (`REQUIRE_NAME_MASK`, on by default). | Done |
+| FR-43 | `scripts/backup.py` writes one archive with a consistent database snapshot and the uploaded resumes, keeps the newest `BACKUP_KEEP`, and can verify and restore an archive. `TALENTSIFT_DATA_DIR` keeps data outside the code folder. | Done |
+| FR-44 | Starting the app on an older database adds any missing columns in place; no data is dropped. | Done |
 
 ## Non-functional requirements
 
@@ -54,3 +72,6 @@ The user is always a hiring manager, never an applicant.
 | NFR-10 | **Secrets.** API keys come only from `.env` or the hosting secrets manager and are never logged or committed. | Done |
 | NFR-11 | **Explainability.** Reasons are specific, job-related, respectful, and never reference personal characteristics. | Done |
 | NFR-12 | **Resilience.** LLM calls have timeouts and one retry on network failure; fatal provider errors stop the run with a clear message instead of failing every applicant. | Done |
+| NFR-13 | **Truthful drafts.** A saved resume version contains no skill, credential, employer, date, or number beyond the candidate's core facts. Enforced by the output schema, the guard, and the template fallback. | Done |
+| NFR-14 | **Separation of sides.** One install serves one employer organization and its candidates-facing pages; the MVP has no accounts, so separation is by design of the data model and pages, not by login. | Done |
+| NFR-15 | **Speed.** A batch of at least 25 resumes is ranked in under five minutes. Proven offline in CI; the real-model timing is recorded at UAT. | Done |

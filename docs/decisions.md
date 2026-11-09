@@ -138,3 +138,82 @@ Format: **ID - title** (date, decided by). Context, decision, consequences.
 - **Decision:** `seed_demo` drafts each sample role with the AI, deletes any criterion flagged as a possible
   proxy (the Operations posting plants "Recent graduate preferred"), then approves, as a careful manager would.
   The manual flow on the Roles page keeps the flag visible so the manager makes that call.
+
+## MVP build sprint (November 2026)
+
+Decisions D-023 to D-033 were made in code during the MVP build and are **proposed**: they need the three
+founders' agreement at the next status meeting, like any other sponsor-level call (Planning Report section 6.1).
+
+### D-023 - Category weights are shares, not multipliers (2026-11-09, proposed)
+- **Context:** The SOW promises adjustable weights for skills, education, certifications, and experience, with
+  rankings "traceable to the employer's weights".
+- **Decision:** Each criterion has one category. A category's score is the weighted average of its criteria. The
+  employer's four weights become shares of the categories the rubric actually uses, and the fit score is the sum
+  of share x category score, minus the must-have penalty (D-003 unchanged).
+- **Consequences:** The breakdown reads as plain arithmetic ("Skills 82 x 60% = 49.2 points"). A rubric with every
+  criterion in one category scores exactly as the prototype did, so v1 results are unchanged. A category with one
+  minor criterion still gets its full share: that is what the employer asked for, and the Roles page shows the
+  split before approval.
+
+### D-024 - Weights are part of the rubric version (2026-11-09, proposed)
+- **Decision:** Changing weights on an approved rubric creates a new draft version (like editing a criterion).
+  Each run also stores the weights it used.
+- **Consequences:** Two runs of the same version always use the same weights. Weights are in the rubric hash, so
+  cached model replies are not reused across a weight change even though the model never sees weights. That
+  costs some API spend and keeps the cache rule simple (D-012).
+
+### D-025 - A short model list in code, with Claude as the default (2026-11-09, proposed; refines D-001)
+- **Context:** D-001 kept model names out of code. The SOW adds "choice of AI model" with Claude as default.
+- **Decision:** `talentsift/model_catalog.py` is the only place that names models. The Settings page offers that
+  list plus "Other" for any OpenRouter model id. The running model still comes from `LLM_MODEL`.
+- **Consequences:** The list must be checked against openrouter.ai/models before each release. The per-run model
+  picker on the Screen page (baseline task 5.2) stays deferred.
+
+### D-026 - The candidate side has no accounts; an access code opens a profile (2026-11-09, proposed)
+- **Context:** Accounts and permissions are out of scope for the MVP (SOW section 6).
+- **Decision:** Creating a profile shows a random access code once; only its SHA-256 hash is stored.
+- **Consequences:** A lost code cannot be recovered. Anyone with the code can open the profile, so it must be
+  treated like a password. Production needs real accounts (roadmap).
+
+### D-027 - The model writes wording only; code prints the facts (2026-11-09, proposed)
+- **Context:** Resume-drafting hallucination is a medium-likelihood, high-impact risk in the SOW register.
+- **Decision:** The draft schema lets the model write a summary, a skills list, and bullets under experience
+  facts. Job titles, employers, schools, degrees, certifications, and dates are rendered from the facts.
+- **Consequences:** The model cannot invent an employer or a degree, by construction. The guard only has to
+  check free text. Candidates cannot hand-edit a draft in the MVP: they change their facts and draft again.
+
+### D-028 - The guard is strict: named terms and numbers exact, posting words blocked (2026-11-09, proposed)
+- **Decision:** See `docs/drafting_guard.md`. A word that comes from the job posting and is not supported by the
+  facts blocks the draft, even an ordinary word.
+- **Consequences:** Some honest rewordings are rejected. That is the safe direction, and the fallback (D-029)
+  means the candidate always gets a usable draft.
+
+### D-029 - Fallback is the candidate's own wording (2026-11-09, proposed)
+- **Decision:** After two guard failures or an AI outage, the assistant arranges the candidate's fact lines by
+  relevance to the posting, with no AI wording. This is the risk register's "template drafting with fact slots".
+- **Consequences:** Drafting works with no API key, which also makes the demo safe offline.
+
+### D-030 - Candidate prompts and drafts are not written to the audit log (2026-11-09, proposed)
+- **Context:** The audit log, with its raw prompt viewer, is an employer-side page. Candidate prompts contain the
+  candidate's facts.
+- **Decision:** Candidate events record what happened (source, guard result, model, hashes, counts) and never
+  the content. This extends D-015.
+
+### D-031 - A resume with no masked name is not sent to the model (2026-11-09, proposed)
+- **Context:** The prototype audit found header layouts where the name was never found, so the whole resume went
+  to the model and the audit log unmasked.
+- **Decision:** Masking was hardened, and screening now refuses to send a readable resume that has no `[NAME]`
+  in its masked text. It goes to Needs review with that reason. `REQUIRE_NAME_MASK=false` turns this off.
+- **Consequences:** A few resumes need a human read. Resumes ingested before this change keep their old masked
+  text: re-import them (or reseed the demo) to apply the new rules.
+
+### D-032 - Schema changes are applied in place at startup (2026-11-09, proposed)
+- **Decision:** `db.upgrade_schema` adds columns the models define and an older SQLite file lacks. It never drops
+  or rewrites anything. File databases use WAL mode and a five-second busy timeout.
+- **Consequences:** No migration tool to learn for the MVP. A change that needs more than "add a column" will
+  need a real migration tool.
+
+### D-033 - Sample postings carry all four categories; demo thresholds lowered to 35 (2026-11-09, proposed)
+- **Decision:** Both sample postings gained education, experience, and certification lines, and the sample roles
+  ship with unequal weights. Six fictional resumes were added (26 in total). The sample roles' auto-reject
+  threshold moved from 40 to 35 so the documented shortlists and borderline groups stay the same.
