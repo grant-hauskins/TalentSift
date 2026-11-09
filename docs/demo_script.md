@@ -34,12 +34,13 @@ breakdown for every candidate, and demonstrate both sides. Presentation: Novembe
 | 9 | Candidate Draft: paste the analyst posting (it asks for Snowflake) and draft | "The posting decides what goes first. It is never a source of content." |
 | 10 | Point at "Passed", then open "What the check rejected" if present | "Software checks every line. No Snowflake: the candidate never said it." |
 | 11 | Tick the approval, save as "Analyst" | "Nothing is saved until the candidate approves it." |
-| 12 | Candidate Versions: compare with a second saved version | "Versions side by side. Scoring them against a role is next on the roadmap." |
+| 12 | Candidate Versions: compare with a second saved version, then click "Score these versions" | "Versions side by side, then scored on the same criteria. Same engine as the employer side, on the candidate's own posting." |
+| 13 | Open the suggestions for the weaker version | "Suggestions come from the score breakdown and the candidate's own facts. Where the facts do not cover a requirement, it says so. It never writes it for them." |
 
 ## Close (about 1 minute)
 
 - Both sides, one scoring vocabulary: skills, education, certifications, experience.
-- What is deferred: DOCX, per-run model choice, A/B scoring of versions, improvement suggestions, accounts.
+- All eight SOW features are in. Deferred: DOCX, per-run model choice, PDF export, accounts.
 - Numbers to quote: batch size and time from step 4; test count from CI.
 
 ## If something breaks

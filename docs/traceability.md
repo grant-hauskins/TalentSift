@@ -51,6 +51,8 @@ Requirement text lives in [requirements.md](requirements.md). Test paths are rel
 | FR-42 Unmasked name never reaches the model | `masking.py::name_was_masked`, `scoring.py::_name_exposed` | `test_defect_fixes.py::test_resume_without_a_masked_name_is_not_sent_to_the_model`, `test_masking_hardening.py` (all) |
 | FR-43 Backup and restore | `backup.py`, `scripts/backup.py`, `config.py` | `test_backup.py` (all) |
 | FR-44 Schema upgrade in place | `db.py::upgrade_schema` | `test_schema_upgrade.py` (all) |
+| FR-45 A/B scoring of versions | `version_scoring.py`, `rubric.py::draft_criteria`, `pages/9_Candidate_Versions.py` | `test_version_scoring.py::test_the_version_with_more_relevant_facts_scores_higher`, `::test_scoring_is_repeatable`, `::test_the_model_sees_no_name_or_contact_details_and_employer_data_is_untouched`, `::test_evidence_not_found_in_the_version_is_flagged` |
+| FR-46 Suggestions with nothing added | `suggestions.py` | `test_version_scoring.py::test_suggestions_point_to_the_candidates_own_facts_that_a_version_left_out`, `::test_a_requirement_the_facts_do_not_cover_is_reported_as_a_gap_never_filled_in`, `::test_every_quoted_line_comes_verbatim_from_the_facts_and_must_haves_come_first` |
 
 ## Non-functional requirements
 

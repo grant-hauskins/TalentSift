@@ -109,8 +109,8 @@ tests/                          # pytest suite, run in CI on every pull request
 
 The v1 prototype above became the MVP in three short sprints (Nov 4 to Nov 17, present Nov 18). The backlog is
 the 27 Mission Control tasks; each has a GitHub issue. Seven baseline tasks are deferred past Nov 18: 1.2, 4.3
-DOCX parser, 4.5 reliability pass, 5.2 per-run model picker, 6.4 A/B scoring, 6.5 improvement suggestions, 6.7
-offline client extensions.
+DOCX parser, 4.5 reliability pass, 5.2 per-run model picker, 6.7 offline client extensions. Baseline tasks 6.4
+(A/B scoring) and 6.5 (improvement suggestions) were first deferred, then built on November 9 (D-034, D-035).
 
 | Task | WBS | Work package | Owner | Sprint | Issue | Main files or document |
 |------|-----|--------------|-------|--------|-------|------------------------|
@@ -151,6 +151,8 @@ talentsift/candidates.py        # candidate profile, consent, access code, core 
 talentsift/draft_template.py    # fact-only draft builder: the fallback and the offline "model"
 talentsift/guard.py             # the no-new-facts guard (deterministic, no AI)
 talentsift/drafting.py          # prompt, guarded retry, fallback, rendering, saved versions, compare
+talentsift/version_scoring.py   # A/B: score saved versions against a pasted job description
+talentsift/suggestions.py       # suggestions from the score breakdown and the candidate's own facts (no AI)
 talentsift/textutil.py          # shared keyword and stemming helpers
 pages/7_Candidate_Profile.py    # notice and consent, core facts, delete my data
 pages/8_Candidate_Draft.py      # draft for a pasted job description, check result, approve and save

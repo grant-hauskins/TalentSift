@@ -49,6 +49,20 @@ def _criteria_from_draft(draft: RubricDraft) -> list[CriterionInput]:
     ]
 
 
+def draft_criteria(client: LLMClient, settings: Settings, *, posting_text: str, title: str = "") -> tuple[list[CriterionInput], str]:
+    """Draft criteria from a posting without saving anything. Returns (criteria, error message).
+
+    Used by the candidate side, which must not create roles. Criteria flagged as possible proxies for a
+    protected characteristic are left out: a candidate should not be scored on them.
+    """
+    if len(posting_text.strip()) < 40:
+        return [], "Paste the full job description (at least a few sentences)."
+    _prompt, call = _ask_for_draft(client, settings, posting_text, title)
+    if not call.ok:
+        return [], f"The AI could not read the job description: {call.fatal_error or call.last_error or 'unknown error'}"
+    return [c for c in _criteria_from_draft(call.value) if not c.proxy_warning], ""
+
+
 def _log_draft(session: Session, *, role_id: int | None, prompt, call, client: LLMClient, posting_text: str, extra: dict) -> None:
     log_llm_attempts(
         session,

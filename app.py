@@ -49,7 +49,7 @@ with ui.db_session() as session:
     candidate_steps = [
         ("pages/7_Candidate_Profile.py", "Candidate Profile", "👤", "Read the AI notice, then enter your core facts: skills, education, certifications, experience."),
         ("pages/8_Candidate_Draft.py", "Candidate Draft", "✍️", "Paste a job description. The assistant drafts from your facts only, and a guard checks every line."),
-        ("pages/9_Candidate_Versions.py", "Candidate Versions", "🗂️", "Save approved drafts as named versions and compare them side by side."),
+        ("pages/9_Candidate_Versions.py", "Candidate Versions", "🗂️", "Save approved drafts, compare them, score them against a job description, and get suggestions from your own facts."),
     ]
     for page, label, icon, text in candidate_steps:
         left, right = st.columns([1, 4])

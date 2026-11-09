@@ -38,7 +38,7 @@ categories and the LLM layer, and nothing else: neither can see the other's data
 | FR-25 | A deterministic offline client lets the app run, demo, and test without network access. | Done |
 | FR-26 | Every page shows the banner: "AI recommendations and auto-rejections are logged and reversible. Review results before contacting applicants." | Done |
 | FR-27 | Scripts generate 20 fictional sample resumes and 2 role profiles, and seed a demo database. | Done |
-| FR-28 | DOCX and OCR ingestion, accounts and per-role permissions, a per-run model picker on the Screen page, A/B scoring of candidate resume versions against a role, improvement suggestions from the score breakdown, PDF export of candidate versions, emailing candidates, ATS integrations. | Planned |
+| FR-28 | DOCX and OCR ingestion, accounts and per-role permissions, a per-run model picker on the Screen page, PDF export of candidate versions, emailing candidates, ATS integrations. | Planned |
 | FR-29 | Every criterion belongs to one category: `skills`, `education`, `certifications`, or `experience`. The AI draft proposes a category and the manager can change it. | Done |
 | FR-30 | The manager sets a weight (0-100) for each category on the Roles page. Only relative size matters. Categories with no criteria are ignored. At least one category that has criteria must have a weight above 0. Weights are part of the rubric: changing them on an approved version creates a new draft version. | Done |
 | FR-31 | Fit score = sum over the categories in use of (category share x category score), minus the must-have penalty. Category score = weighted average of that category's 0-4 criterion scores, scaled to 0-100. Category share = its weight divided by the total weight of the categories in use. | Done |
@@ -55,6 +55,8 @@ categories and the LLM layer, and nothing else: neither can see the other's data
 | FR-42 | A readable resume whose name could not be found and masked is not sent to the model; it goes to `needs_review` with the reason (`REQUIRE_NAME_MASK`, on by default). | Done |
 | FR-43 | `scripts/backup.py` writes one archive with a consistent database snapshot and the uploaded resumes, keeps the newest `BACKUP_KEEP`, and can verify and restore an archive. `TALENTSIFT_DATA_DIR` keeps data outside the code folder. | Done |
 | FR-44 | Starting the app on an older database adds any missing columns in place; no data is dropped. | Done |
+| FR-45 | A candidate can score up to four saved versions against one pasted job description. The posting becomes criteria once, every version is scored on the same criteria by the same engine as the employer side, and the fit score and category breakdown are computed in code. The name and contact header is removed first; no employer table is read or written. The result is labeled an estimate. | Done |
+| FR-46 | For each low-scoring criterion, the candidate gets a suggestion written by code from their own core facts: use a supporting fact the version left out, add real detail to a fact that is already there, or a plain statement that the facts do not cover it. Suggestions never propose a skill, credential, or experience the candidate has not entered. | Done |
 
 ## Non-functional requirements
 

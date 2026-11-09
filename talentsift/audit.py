@@ -43,6 +43,7 @@ EVENT_TYPES = (
     "resume_drafted",
     "draft_guard_blocked",
     "resume_version_saved",
+    "versions_scored",
     "candidate_data_deleted",
 )
 

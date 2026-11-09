@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **A/B scoring of candidate versions**: score up to four saved versions against one pasted job description, on
+  one shared set of criteria, with a fit score and category breakdown for each.
+- **Improvement suggestions**: for each low-scoring criterion, a suggestion written by code from the candidate's
+  own core facts. Requirements the facts do not cover are reported as gaps, never filled in.
 - **Category weights.** Every criterion belongs to skills, education, certifications, or experience. The manager
   weights the four categories on the Roles page; the fit score combines category scores by those weights.
 - **Score breakdown** by category for every candidate on Results; each run records the weights it used.
