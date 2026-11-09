@@ -1,4 +1,4 @@
-"""Load the fictional demo: two roles drafted from sample postings, 20 sample resumes, optional screening runs.
+"""Load the fictional demo: two roles drafted from sample postings, 26 sample resumes, optional screening runs.
 
 Used by `scripts/seed_demo.py`, the "Load demo data" button, and `AUTO_SEED_DEMO` (hosted demos lose their
 SQLite file on reboot). Safe to run twice: existing roles (by title) and files (by hash) are skipped.
@@ -84,10 +84,12 @@ def seed_demo(
             summary.errors.append(f"{profile['title']}: {outcome.error}")
             continue
         role = outcome.role
-        # Do what a careful manager would: remove criteria the AI flagged as proxies, then approve.
+        # Do what a careful manager would: set the category weights, remove criteria the AI flagged as
+        # proxies, then approve.
         criteria = current_criteria(session, role)
         flagged = [c.name for c in criteria if c.proxy_warning]
-        if flagged:
+        weights = profile.get("category_weights")
+        if flagged or weights:
             save_role(
                 session,
                 role,
@@ -97,6 +99,7 @@ def seed_demo(
                 criteria=[CriterionInput.from_criterion(c) for c in criteria if not c.proxy_warning],
                 auto_reject_threshold=role.auto_reject_threshold,
                 top_n=role.top_n,
+                category_weights=weights,
             )
             summary.removed_proxy_criteria.extend(flagged)
         approve_role(session, role)

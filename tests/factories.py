@@ -77,3 +77,36 @@ def make_role(session, *, criteria=None, approve: bool = True, threshold: int = 
     if approve:
         approve_role(session, role)
     return role
+
+
+# --- Candidate side ----------------------------------------------------------------------------------
+
+ANALYST_POSTING = """Business Data Analyst
+Requirements:
+- SQL queries and Tableau dashboards
+- Snowflake and dbt experience
+- Stakeholder communication
+- Bachelor's degree
+"""
+
+
+def make_candidate(session, *, with_facts: bool = True):
+    """A fictional candidate with one fact in each category. Returns (profile, access code)."""
+    from talentsift.candidates import add_fact, create_profile
+
+    profile, code = create_profile(
+        session, full_name="Avery Exampleton", consent=True, email="avery@example.com", phone="(312) 555-0101",
+        location="Chicago, IL", headline="Business data analyst",
+    )
+    if with_facts:
+        add_fact(session, profile, category="skills", title="SQL, Tableau, Excel, Python")
+        add_fact(
+            session, profile, category="experience", title="Data Analyst", organization="Fictional Grocers",
+            start="2021", end="2025",
+            details="Built 12 Tableau dashboards for the finance team\nWrote SQL queries to analyze weekly sales\nTrained 3 new analysts",
+        )
+        add_fact(session, profile, category="experience", title="Analytics Intern", organization="Mock Markets", start="2020", end="2021",
+                 details="Cleaned vendor files in Excel")
+        add_fact(session, profile, category="education", title="B.S. Business Analytics", organization="Example State University", end="2019")
+        add_fact(session, profile, category="certifications", title="Tableau Desktop Specialist", organization="Tableau", end="2022")
+    return profile, code

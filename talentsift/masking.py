@@ -281,6 +281,8 @@ def _name_from_line(line: str) -> list[str]:
     for word in words:
         if not _NAME_WORD.match(word) or not _is_capitalized(word) or word.lower().strip(".") in _TITLE_WORDS:
             break
+        if word.endswith(".") and len(word) > 3:  # "Q." and "Jr." are name parts; "APIs." ends a sentence
+            break
         name.append(word)
     return name if 2 <= len(name) <= 5 else []
 

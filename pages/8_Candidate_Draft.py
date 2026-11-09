@@ -41,6 +41,8 @@ with ui.db_session() as session:
                     st.session_state.candidate_draft = generate_draft(
                         session, profile, client, settings, role_title=role_title, role_text=role_text
                     )
+                    # A new draft needs a new approval: its widgets get fresh keys, so nothing stays ticked.
+                    st.session_state.candidate_draft_number = st.session_state.get("candidate_draft_number", 0) + 1
             except CandidateError as exc:
                 st.error(str(exc))
 
@@ -74,9 +76,10 @@ with ui.db_session() as session:
     st.download_button("Download as text (.md)", outcome.body, file_name="resume_draft.md", mime="text/markdown")
 
     st.markdown("**Approve and save this version**")
-    with st.form("save_version"):
-        label = st.text_input("Name this version", value=outcome.role_title, placeholder="Analyst roles")
-        approved = st.checkbox("I have read this draft, and everything in it is accurate.")
+    number = st.session_state.get("candidate_draft_number", 0)
+    with st.form(f"save_version_{number}"):
+        label = st.text_input("Name this version", value=outcome.role_title, placeholder="Analyst roles", key=f"version_label_{number}")
+        approved = st.checkbox("I have read this draft, and everything in it is accurate.", key=f"version_approved_{number}")
         left, right = st.columns(2)
         save_clicked = left.form_submit_button("Approve and save", type="primary")
         discard_clicked = right.form_submit_button("Discard this draft")
