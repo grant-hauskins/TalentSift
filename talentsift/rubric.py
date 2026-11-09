@@ -41,6 +41,7 @@ def _criteria_from_draft(draft: RubricDraft) -> list[CriterionInput]:
             description=c.description.strip(),
             type=c.type,
             weight=c.weight,
+            category=c.category,
             source="ai_draft",
             proxy_warning=c.proxy_note.strip() if c.proxy_risk else "",
         )

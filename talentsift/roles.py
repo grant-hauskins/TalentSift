@@ -16,9 +16,12 @@ from sqlmodel import Session, select
 
 from talentsift.audit import event_payload, list_events, log_event, sha256_text
 from talentsift.models import (
+    CATEGORIES,
     CRITERION_SOURCES,
     CRITERION_TYPES,
     CRITERION_WEIGHTS,
+    DEFAULT_CATEGORY,
+    DEFAULT_CATEGORY_WEIGHTS,
     Criterion,
     Role,
     dumps,
@@ -43,9 +46,10 @@ class CriterionInput:
     source: str = "manager"
     proxy_warning: str = ""
     id: int | None = None  # set when the row came from an existing criterion
+    category: str = DEFAULT_CATEGORY
 
-    def content(self) -> tuple[str, str, str, str]:
-        return (self.name.strip(), self.description.strip(), self.type, self.weight)
+    def content(self) -> tuple[str, str, str, str, str]:
+        return (self.name.strip(), self.description.strip(), self.type, self.weight, self.category)
 
     @classmethod
     def from_criterion(cls, criterion: Criterion) -> "CriterionInput":
@@ -57,6 +61,7 @@ class CriterionInput:
             source=criterion.source,
             proxy_warning=criterion.proxy_warning,
             id=criterion.id,
+            category=criterion.category,
         )
 
 
@@ -101,6 +106,7 @@ def rubric_snapshot(role: Role, criteria: Iterable[Criterion]) -> dict:
         "version": role.version,
         "title": role.title,
         "summary": role.summary,
+        "category_weights": role.category_weights,
         "criteria": [
             {
                 "criterion_id": c.id,
@@ -108,6 +114,7 @@ def rubric_snapshot(role: Role, criteria: Iterable[Criterion]) -> dict:
                 "description": c.description,
                 "type": c.type,
                 "weight": c.weight,
+                "category": c.category,
                 "order": c.order,
                 "source": c.source,
             }
@@ -140,6 +147,30 @@ def validate_criteria(criteria: list[CriterionInput]) -> None:
             raise RoleError(f"'{c.name}': weight must be one of {CRITERION_WEIGHTS}.")
         if c.source not in CRITERION_SOURCES:
             raise RoleError(f"'{c.name}': unknown source {c.source!r}.")
+        if c.category not in CATEGORIES:
+            raise RoleError(f"'{c.name}': category must be one of {CATEGORIES}.")
+
+
+def clean_category_weights(weights: dict[str, int] | None, criteria: list[CriterionInput]) -> dict[str, int]:
+    """Validate employer weights (whole numbers 0-100 per category) and fill in missing categories.
+
+    At least one category that has criteria must carry weight, otherwise no score could be computed.
+    """
+    cleaned = dict(DEFAULT_CATEGORY_WEIGHTS)
+    for category, value in (weights or {}).items():
+        if category not in CATEGORIES:
+            raise RoleError(f"Unknown category {category!r}.")
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            raise RoleError(f"The weight for {category} must be a whole number.") from None
+        if not 0 <= number <= 100:
+            raise RoleError(f"The weight for {category} must be between 0 and 100.")
+        cleaned[category] = number
+    used = {c.category for c in criteria}
+    if not any(cleaned[category] > 0 for category in used):
+        raise RoleError("Give a weight above 0 to at least one category that has criteria.")
+    return cleaned
 
 
 def _validate_policy(threshold: int, top_n: int) -> None:
@@ -164,6 +195,7 @@ def _add_criteria(
                 description=c.description.strip(),
                 type=c.type,
                 weight=c.weight,
+                category=c.category,
                 order=order,
                 source=c.source,
                 proxy_warning=c.proxy_warning,
@@ -180,6 +212,7 @@ def create_role(
     summary: str = "",
     auto_reject_threshold: int = 40,
     top_n: int = 5,
+    category_weights: dict[str, int] | None = None,
     log_action: str | None = "created",
     commit: bool = True,
 ) -> Role:
@@ -194,6 +227,7 @@ def create_role(
         posting_text=posting_text,
         auto_reject_threshold=auto_reject_threshold,
         top_n=top_n,
+        category_weights_json=dumps(clean_category_weights(category_weights, criteria)),
     )
     session.add(role)
     session.flush()
@@ -222,21 +256,28 @@ def save_role(
     auto_reject_threshold: int,
     top_n: int,
     changed_rows_source: str = "manager",
+    category_weights: dict[str, int] | None = None,
 ) -> SaveOutcome:
     """Save edits from the Roles page, creating a new version when an approved rubric changes.
 
     Rows that are new or edited get `changed_rows_source` ("manager" for UI edits, "ai_draft" for a redraft).
+    `category_weights=None` keeps the role's current weights. Weights are part of the rubric: changing
+    them on an approved version creates a new draft version, so past runs stay tied to the weights used.
     """
     if not title.strip():
         raise RoleError("Give the role a title.")
     validate_criteria(criteria)
     _validate_policy(auto_reject_threshold, top_n)
 
+    weights = clean_category_weights(role.category_weights if category_weights is None else category_weights, criteria)
+    weights_changed = weights != role.category_weights
+
     existing = current_criteria(session, role)
     old_by_id = {c.id: c for c in existing}
     rubric_changed = (
         title.strip() != role.title
         or summary.strip() != role.summary
+        or weights_changed
         or [c.content() for c in criteria] != [CriterionInput.from_criterion(c).content() for c in existing]
     )
     policy_changed = (auto_reject_threshold, top_n) != (role.auto_reject_threshold, role.top_n)
@@ -264,7 +305,7 @@ def save_role(
         for order, c in enumerate(criteria):
             if c.id in old_by_id:
                 row = old_by_id[c.id]
-                row.name, row.description, row.type, row.weight = c.content()
+                row.name, row.description, row.type, row.weight, row.category = c.content()
                 row.order, row.source, row.proxy_warning = order, c.source, c.proxy_warning
             else:
                 _add_criteria(session, role, version, [c], start_order=order)
@@ -277,6 +318,7 @@ def save_role(
 
     role.title, role.summary, role.posting_text = title.strip(), summary.strip(), posting_text
     role.auto_reject_threshold, role.top_n = auto_reject_threshold, top_n
+    role.category_weights_json = dumps(weights)
     role.updated_at = utcnow()
     session.flush()
     log_event(
@@ -287,6 +329,8 @@ def save_role(
             "action": action,
             "version": version,
             "rubric_changed": rubric_changed,
+            "category_weights": weights,
+            "category_weights_changed": weights_changed,
             "policy_changed": policy_changed,
             "posting_changed": posting_changed,
             "auto_reject_threshold": auto_reject_threshold,
@@ -342,6 +386,8 @@ def discard_draft(session: Session, role: Role) -> None:
         snapshot = event_payload(event).get("snapshot", {})
         if snapshot.get("version") == role.approved_version:
             role.title, role.summary = snapshot["title"], snapshot["summary"]
+            if snapshot.get("category_weights"):  # absent in approvals logged before category weights
+                role.category_weights_json = dumps(snapshot["category_weights"])
             break
     role.updated_at = utcnow()
     session.flush()
@@ -367,6 +413,7 @@ def duplicate_role(session: Session, role: Role) -> Role:
         summary=role.summary,
         auto_reject_threshold=role.auto_reject_threshold,
         top_n=role.top_n,
+        category_weights=role.category_weights,
         log_action=None,
         commit=False,
     )

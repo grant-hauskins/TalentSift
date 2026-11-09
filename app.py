@@ -59,7 +59,9 @@ with st.expander("How TalentSift decides"):
         f"""
 - **The AI scores, code decides.** For each criterion the model returns a 0-4 score, a rationale, and verbatim
   quotes from the masked resume. Quotes are checked against the resume text.
-- **Fit score (0-100)** = weighted average of criterion scores (high = 3, medium = 2, low = 1), minus
+- **Fit score (0-100)**: every criterion belongs to a category (skills, education, certifications, or
+  experience). Each category's score is the weighted average of its criteria (high = 3, medium = 2, low = 1).
+  The category scores are combined using the weights you set on the role, minus
   **{settings.must_have_penalty:g} points** for each must-have scored 0-1 (never below 0).
 - **Ranking**: fit score, then must-haves met, then applicant id. Never by name.
 - **Statuses**: the top N at or above the role's threshold are *shortlisted* (ties included); below the

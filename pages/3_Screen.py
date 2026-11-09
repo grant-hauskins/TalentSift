@@ -7,7 +7,7 @@ from sqlmodel import select
 from talentsift import ui
 from talentsift.ingest import list_batches
 from talentsift.models import SCREENABLE_PARSE_STATUSES, Applicant, Role, ScreeningRun
-from talentsift.roles import list_roles
+from talentsift.roles import current_criteria, list_roles
 from talentsift.scoring import ScreeningError, run_screening
 
 settings = ui.page_setup(
@@ -47,6 +47,11 @@ with ui.db_session() as session:
     cols[2].metric("Top N", role.top_n)
     cols[3].metric("Auto-reject mode", settings.auto_reject_mode)
     cols[4].metric("Cost cap", f"${settings.cost_cap_usd:.2f}")
+    st.caption(
+        "Employer weights: "
+        + ui.weights_caption(role.category_weights, {c.category for c in current_criteria(session, role)})
+        + " · change them on the Roles page."
+    )
     if skipped:
         st.warning(
             f"{len(skipped)} resume(s) cannot be read and will go straight to Needs review: "

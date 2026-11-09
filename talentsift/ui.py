@@ -17,6 +17,8 @@ from talentsift.config import Settings, get_settings
 from talentsift.db import create_db_engine, init_db, new_session
 from talentsift.llm import LLMClient, LLMError, build_client, describe_provider
 from talentsift.models import (
+    CATEGORIES,
+    CATEGORY_LABELS,
     STATUS_AUTO_REJECTED,
     STATUS_NEEDS_REVIEW,
     STATUS_NOT_SHORTLISTED,
@@ -177,3 +179,35 @@ def fmt_time(value: datetime | None) -> str:
 
 def fmt_score(value: float | None) -> str:
     return "—" if value is None else f"{value:.1f}"
+
+
+def weights_caption(weights: dict[str, int], used: set[str] | None = None) -> str:
+    """ "Skills 40% · Experience 30% ..." for the categories a rubric uses (all four when `used` is None)."""
+    active = [c for c in CATEGORIES if used is None or c in used]
+    total = sum(weights.get(c, 0) for c in active)
+    if total <= 0:
+        return "equal weights"
+    return " · ".join(f"{CATEGORY_LABELS[c]} {100 * weights.get(c, 0) / total:.0f}%" for c in active)
+
+
+def breakdown_rows(breakdown: list[dict]) -> list[dict]:
+    """Table rows for a stored category breakdown (see scoring.CategoryResult.as_dict)."""
+    return [
+        {
+            "Category": CATEGORY_LABELS.get(item["category"], item["category"]),
+            "Criteria": item["criteria_count"],
+            "Category score": "—" if item["score"] is None else f"{item['score']:.1f}",
+            "Employer weight": "—" if item["score"] is None else f"{item['share_pct']:.0f}%",
+            "Points": "—" if item["score"] is None else f"{item['points']:.1f}",
+        }
+        for item in breakdown
+    ]
+
+
+def breakdown_caption(breakdown: list[dict]) -> str:
+    """One line: "Skills 82 × 40% · Experience 75 × 30% ..." for the categories that were scored."""
+    return " · ".join(
+        f"{CATEGORY_LABELS.get(item['category'], item['category'])} {item['score']:.0f} × {item['share_pct']:.0f}%"
+        for item in breakdown
+        if item["score"] is not None
+    )

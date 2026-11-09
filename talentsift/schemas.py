@@ -69,6 +69,11 @@ class DraftCriterion(BaseModel):
     description: str = Field(description="What resume evidence satisfies this criterion")
     type: Literal["must_have", "nice_to_have"]
     weight: Literal["high", "medium", "low"]
+    category: Literal["skills", "education", "certifications", "experience"] = Field(
+        default="skills",
+        description="What kind of evidence this criterion looks for: a skill or tool, education, a "
+        "certification or license, or work experience",
+    )
     proxy_risk: bool = Field(
         description="True if this criterion could act as a proxy for a protected characteristic"
     )
@@ -98,3 +103,27 @@ def check_rubric_draft(draft: RubricDraft) -> None:
             problems.append(f"criterion '{criterion.name}' has proxy_risk but no proxy_note")
     if problems:
         raise ValueError("; ".join(problems))
+
+
+# --- Candidate drafting --------------------------------------------------------------------------
+
+
+class DraftExperience(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fact_id: int = Field(description="The fact_id of one experience fact, exactly as given")
+    bullets: list[str] = Field(
+        min_length=1, max_length=6, description="Accomplishment bullets that restate only this fact's own details"
+    )
+
+
+class ResumeDraft(BaseModel):
+    """What the model may write. Titles, employers, schools, and dates are rendered from the facts by code."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = Field(description="2-3 sentence professional summary using only the candidate's facts")
+    skills: list[str] = Field(description="Skills copied from the candidate's skill facts, most relevant first")
+    experience: list[DraftExperience] = Field(description="One entry per experience fact to include")
+    education_ids: list[int] = Field(description="fact_id of each education fact to include")
+    certification_ids: list[int] = Field(description="fact_id of each certification fact to include")

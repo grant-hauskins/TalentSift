@@ -42,6 +42,18 @@ CRITERION_TYPES = ("must_have", "nice_to_have")
 CRITERION_WEIGHTS = ("high", "medium", "low")
 CRITERION_SOURCES = ("ai_draft", "manager")
 
+# Scoring categories (SOW section 6): the employer weights these four against each other, and a
+# candidate's core facts are filed under the same four.
+CATEGORIES = ("skills", "education", "certifications", "experience")
+DEFAULT_CATEGORY = "skills"
+CATEGORY_LABELS = {
+    "skills": "Skills",
+    "education": "Education",
+    "certifications": "Certifications",
+    "experience": "Experience",
+}
+DEFAULT_CATEGORY_WEIGHTS = {category: 25 for category in CATEGORIES}
+
 # Parse statuses. Only "parsed" and "partial" resumes are screened; "partial" never auto-rejects.
 PARSE_PARSED = "parsed"
 PARSE_PARTIAL = "partial"  # some pages had no extractable text (e.g. a scanned page)
@@ -88,12 +100,21 @@ class Role(SQLModel, table=True):
     approved_at: Optional[datetime] = None  # (ext)
     auto_reject_threshold: int = 40  # fit score 0-100
     top_n: int = 5
+    # Employer weights per category for the current rubric version, e.g. {"skills": 40, ...}.
+    # Part of the rubric: changing them on an approved version creates a new draft version.
+    category_weights_json: str = ""
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
     @property
     def is_approved(self) -> bool:
         return self.approved_version == self.version
+
+    @property
+    def category_weights(self) -> dict[str, int]:
+        """Weights for all four categories (equal when the manager has not set any)."""
+        stored = loads(self.category_weights_json, default={}) or {}
+        return {c: int(stored.get(c, DEFAULT_CATEGORY_WEIGHTS[c])) for c in CATEGORIES}
 
 
 class Criterion(SQLModel, table=True):
@@ -108,6 +129,7 @@ class Criterion(SQLModel, table=True):
     description: str = ""
     type: str = "nice_to_have"  # must_have | nice_to_have
     weight: str = "medium"  # high | medium | low
+    category: str = DEFAULT_CATEGORY  # skills | education | certifications | experience
     order: int = 0
     source: str = "manager"  # ai_draft | manager
     proxy_warning: str = ""  # (ext) AI note when a criterion could proxy for a protected trait
@@ -149,6 +171,7 @@ class ScreeningRun(SQLModel, table=True):
     top_n: int = 5
     auto_reject_mode: str = "automatic"
     must_have_penalty: float = 15.0
+    category_weights_json: str = ""  # the employer's category weights used by this run
     cost_cap_usd: float = 0.0
     force_rescore: bool = False
     started_at: datetime = Field(default_factory=utcnow)
@@ -181,6 +204,7 @@ class Evaluation(SQLModel, table=True):
     strengths_json: str = "[]"  # (ext)
     gaps_json: str = "[]"  # (ext)
     reasons_json: str = "{}"  # (ext) job-related reasons for the status (see scoring.build_reasons)
+    breakdown_json: str = "[]"  # per-category score, weight share, and points (see scoring.CategoryResult)
     flags_json: str = "[]"  # (ext) guardrail flags that sent this applicant to review
     model_used: str = ""
     provider_used: str = ""
@@ -237,3 +261,69 @@ class AuditEvent(SQLModel, table=True):
     prompt_version: Optional[str] = None
     input_hash: Optional[str] = None
     payload_json: str = "{}"
+
+
+# --- Candidate side ------------------------------------------------------------------------------
+# These tables are separate from the employer tables above: no foreign key links a candidate to a role,
+# an applicant, or a screening run, and candidate pages never query employer tables.
+
+FACT_CATEGORIES = CATEGORIES
+VERSION_SOURCES = ("ai", "template")  # who wrote the wording: the model (guard passed) or the fact template
+
+
+class CandidateProfile(SQLModel, table=True):
+    """A candidate's own workspace. Reached with an access code; there are no accounts in the MVP."""
+
+    __tablename__ = "candidate_profile"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    access_code_hash: str = Field(index=True, unique=True)  # sha256 of the code; the code is shown once
+    full_name: str = ""
+    email: str = ""
+    phone: str = ""
+    location: str = ""  # city and state only; never a street address
+    headline: str = ""  # e.g. "Business data analyst"
+    consent_at: Optional[datetime] = None  # when the candidate accepted the AI notice
+    consent_notice_version: str = ""
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class CoreFact(SQLModel, table=True):
+    """One verified fact about the candidate. Drafts may only restate what is written here."""
+
+    __tablename__ = "core_fact"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    profile_id: int = Field(foreign_key="candidate_profile.id", index=True)
+    category: str = DEFAULT_CATEGORY  # skills | education | certifications | experience
+    title: str  # the skill, degree, certification, or job title
+    organization: str = ""  # employer, school, or issuing body
+    start: str = ""  # free text, e.g. "2021" or "Jun 2021"
+    end: str = ""  # free text, e.g. "2025" or "Present"
+    details: str = ""  # one accomplishment or detail per line, in the candidate's own words
+    order: int = 0
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class ResumeVersion(SQLModel, table=True):
+    """A draft the candidate approved and saved. Only drafts that passed the guard can be saved."""
+
+    __tablename__ = "resume_version"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    profile_id: int = Field(foreign_key="candidate_profile.id", index=True)
+    label: str  # the candidate's name for this version, e.g. "Analyst v2"
+    target_role_title: str = ""
+    target_role_text: str = ""  # the job description the candidate pasted
+    body: str = ""  # the resume as Markdown
+    draft_json: str = "{}"  # the structured draft (see schemas.ResumeDraft)
+    source: str = "ai"  # ai | template
+    guard_json: str = "{}"  # the guard report at save time (always passed)
+    facts_hash: str = ""  # sha256 of the core facts the draft was checked against
+    model_used: str = ""
+    provider_used: str = ""
+    prompt_version: str = ""
+    approved_at: datetime = Field(default_factory=utcnow)  # the candidate approved it on save
+    created_at: datetime = Field(default_factory=utcnow)

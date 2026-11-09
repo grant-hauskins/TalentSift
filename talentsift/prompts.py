@@ -22,7 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 SCREEN_PROMPT = "screen_v1"
-RUBRIC_PROMPT = "rubric_draft_v1"
+RUBRIC_PROMPT = "rubric_draft_v2"  # v2 adds the scoring category to each criterion
+DRAFT_PROMPT = "resume_draft_v1"
 
 _PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
 _SYSTEM_MARKER = "<!-- SYSTEM -->"
