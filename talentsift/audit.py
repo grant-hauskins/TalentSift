@@ -37,6 +37,13 @@ EVENT_TYPES = (
     "run_finished",  # (ext)
     "fairness_check",  # (ext)
     "export",
+    # Candidate side. Payloads carry ids, counts, and hashes only: never a candidate's facts or draft text.
+    "candidate_consent",
+    "candidate_facts_changed",
+    "resume_drafted",
+    "draft_guard_blocked",
+    "resume_version_saved",
+    "candidate_data_deleted",
 )
 
 CSV_COLUMNS = (

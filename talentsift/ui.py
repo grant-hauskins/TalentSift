@@ -86,6 +86,45 @@ def banner() -> None:
     st.info(BANNER, icon="⚖️")
 
 
+CANDIDATE_BANNER = "Drafts use only the facts you enter. Software checks every line, and nothing is saved until you approve it."
+CANDIDATE_KEY = "candidate_profile_id"
+
+
+def candidate_page_setup(title: str, caption: str | None = None, *, icon: str = "👤") -> Settings:
+    """First call on every candidate page. Same layout as `page_setup`, with the candidate's own banner."""
+    st.set_page_config(page_title=f"{title} · TalentSift", page_icon=icon, layout="wide")
+    current = settings()
+    st.info(CANDIDATE_BANNER, icon="🛡️")
+    st.title(title)
+    if caption:
+        st.caption(caption)
+    sidebar_status(current)
+    return current
+
+
+def current_candidate(session: Session):
+    """The profile opened in this browser session, or None. Candidate pages never look up any other profile."""
+    from talentsift.candidates import get_profile
+
+    profile = get_profile(session, st.session_state.get(CANDIDATE_KEY))
+    if profile is None:
+        st.session_state.pop(CANDIDATE_KEY, None)
+    else:
+        with st.sidebar:
+            st.caption(f"Candidate profile: **{profile.full_name}**")
+    return profile
+
+
+def require_candidate(session: Session):
+    """Return the open profile, or point the visitor to the profile page and stop."""
+    profile = current_candidate(session)
+    if profile is None:
+        st.warning("Open your profile first: start one, or return with your access code.")
+        st.page_link("pages/7_Candidate_Profile.py", label="Go to Candidate Profile", icon="👤")
+        st.stop()
+    return profile
+
+
 def page_setup(title: str, caption: str | None = None, *, icon: str = "🧭") -> Settings:
     """First call on every page: page config, the disclaimer banner, the title, and the sidebar.
 

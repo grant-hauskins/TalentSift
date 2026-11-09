@@ -7,6 +7,7 @@ It reads the same prompt a real model receives and answers with explainable keyw
   evidence quotes, so they always verify.
 * Rubric drafting: bullet points under "Requirements"-style headings become must-haves, bullets under
   "Preferred"-style headings become nice-to-haves, and known proxy phrases are flagged.
+* Resume drafting: the candidate's own fact wording, reordered by relevance to the target role.
 
 For tests it can also replay scripted replies (`script`) or alter its own replies (`tamper`).
 """
@@ -22,6 +23,7 @@ from pydantic import BaseModel
 
 from talentsift.llm.base import LLMError, LLMResult, extract_json_object
 from talentsift.schemas import ResumeDraft, RubricDraft, ScreeningOutput
+from talentsift.draft_template import FactView, template_draft
 from talentsift.textutil import keywords
 
 FAKE_MODEL = "fake/keyword-matcher-v1"
@@ -253,6 +255,31 @@ def draft_rubric_offline(user_prompt: str) -> dict[str, Any]:
     return {"role_title": title, "summary": summary[:300], "criteria": criteria}
 
 
+# --- Offline resume drafting ------------------------------------------------------------------------
+
+
+def draft_resume_offline(user_prompt: str) -> dict[str, Any]:
+    """Arrange the candidate's own words for the target role (see prompts/resume_draft_v1.md).
+
+    The offline "model" is the fact template: it reorders facts by relevance and never writes new wording.
+    """
+    facts = [
+        FactView(
+            id=item["fact_id"],
+            category=item["category"],
+            title=item.get("title", ""),
+            organization=item.get("organization", ""),
+            start=item.get("start", ""),
+            end=item.get("end", ""),
+            details="\n".join(item.get("details", [])),
+        )
+        for item in json.loads(_tag(user_prompt, "core_facts") or "[]")
+    ]
+    headline = re.search(r"Candidate headline \(may be empty\):[ \t]*(.*)", user_prompt)
+    draft = template_draft(facts, _tag(user_prompt, "target_role"), headline.group(1).strip() if headline else "")
+    return draft.model_dump()
+
+
 # --- The client ------------------------------------------------------------------------------------
 
 
@@ -290,6 +317,8 @@ class FakeLLMClient:
                 reply: dict | str = screen_offline(user)
             elif schema is RubricDraft:
                 reply = draft_rubric_offline(user)
+            elif schema is ResumeDraft:
+                reply = draft_resume_offline(user)
             else:
                 raise LLMError(f"The fake client has no offline behavior for {schema.__name__}")
             if self._tamper is not None:

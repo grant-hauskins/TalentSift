@@ -16,6 +16,7 @@ _STOPWORDS = {
     "both", "more", "most", "least", "about", "over", "under", "up", "out", "also", "has", "have", "had",
     "non", "my", "me", "i",
 }  # fmt: skip
+STOPWORDS = frozenset(_STOPWORDS)
 # Words that appear in almost every posting and say little about a specific skill.
 _GENERIC = {
     "experience", "experienced", "ability", "able", "skill", "skills", "skilled", "strong", "work", "working",
@@ -28,7 +29,8 @@ _GENERIC = {
 _TOKEN = re.compile(r"[a-z][a-z0-9+#]*(?:/[a-z0-9]+)?")
 
 
-def _stem(word: str) -> str:
+def stem(word: str) -> str:
+    """Light stemming: plural and verb endings only (queries -> query, building -> build)."""
     if word.endswith("ies") and len(word) > 4:  # queries -> query
         return word[:-3] + "y"
     for suffix in ("ing", "ed", "es", "s"):
@@ -46,7 +48,7 @@ def keywords(text: str) -> list[str]:
     for token in _TOKEN.findall(text.lower()):
         if len(token) < 2 or token in _STOPWORDS or token in _GENERIC:
             continue
-        stem = _stem(token)
-        if stem not in _STOPWORDS and stem not in _GENERIC:
-            seen.setdefault(stem, None)
+        root = stem(token)
+        if root not in _STOPWORDS and root not in _GENERIC:
+            seen.setdefault(root, None)
     return list(seen)
