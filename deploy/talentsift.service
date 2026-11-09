@@ -1,0 +1,21 @@
+# systemd unit for a self-hosted TalentSift install. See docs/install.md.
+# Copy to /etc/systemd/system/talentsift.service, then: sudo systemctl enable --now talentsift
+[Unit]
+Description=TalentSift (Streamlit)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=talentsift
+Group=talentsift
+WorkingDirectory=/opt/talentsift
+EnvironmentFile=/opt/talentsift/.env
+# Listen on localhost only; put a reverse proxy with a password in front (docs/install.md, step 6).
+ExecStart=/opt/talentsift/.venv/bin/streamlit run app.py --server.address 127.0.0.1 --server.port 8501 --server.headless true
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

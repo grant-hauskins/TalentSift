@@ -6,9 +6,9 @@ Three people maintain TalentSift. These rules keep parallel work safe and leave 
 
 | Owner | Areas |
 |-------|-------|
-| Data owner | `talentsift/parsers/`, `masking.py`, `ingest.py`, `demo.py`, `pages/2_Applicants.py`, `pages/5_Audit.py`, `scripts/` |
-| AI owner | `talentsift/llm/`, `schemas.py`, `prompts.py`, `prompts/`, `rubric.py`, `scoring.py`, `audit.py`, `overrides.py`, `fairness.py` |
-| UX owner | `app.py`, `talentsift/ui.py`, `roles.py`, `pages/1_Roles.py`, `pages/3_Screen.py`, `pages/4_Results.py` |
+| Data and platform owner (Damian) | `talentsift/parsers/`, `masking.py`, `ingest.py`, `demo.py`, `db.py`, `models.py`, `backup.py`, `candidates.py`, `pages/2_Applicants.py`, `pages/5_Audit.py`, `scripts/` |
+| AI and scoring owner (Grant) | `talentsift/llm/`, `schemas.py`, `prompts.py`, `prompts/`, `rubric.py`, `scoring.py`, `audit.py`, `overrides.py`, `fairness.py`, `guard.py`, `drafting.py`, `draft_template.py`, `model_catalog.py` |
+| UX and QA owner (Arizbeth) | `app.py`, `talentsift/ui.py`, `roles.py`, `pages/1_Roles.py`, `pages/3_Screen.py`, `pages/4_Results.py`, `pages/6_Settings.py`, `pages/7_Candidate_Profile.py`, `pages/8_Candidate_Draft.py`, `pages/9_Candidate_Versions.py`, `tests/` |
 
 Anyone can change anything, but the owner reviews the pull request.
 
@@ -32,7 +32,11 @@ Anyone can change anything, but the owner reviews the pull request.
   scans the codebase for it.
 - **Scores are computed in code.** Prompt changes need a new prompt version (`prompts/screen_v2.md`), not an edit
   in place.
-- **Keep the LLM blind to identity.** Only `masked_text` and `display_label` may reach a prompt.
+- **Keep the LLM blind to identity.** Only `masked_text` and `display_label` may reach a screening prompt. A
+  drafting prompt gets the candidate's facts and never their name or contact details.
+- **Keep the two sides apart.** Candidate code never reads employer tables, and candidate events in the audit log
+  carry ids, counts, and hashes only.
+- **The guard decides.** A draft that fails `guard.check_draft` is never shown as ready or saved.
 
 ## Local setup
 
@@ -42,6 +46,6 @@ See the README. Quick version:
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # add OPENROUTER_API_KEY and LLM_MODEL, or set LLM_PROVIDER=fake
-pytest
+python -m pytest
 streamlit run app.py
 ```

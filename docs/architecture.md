@@ -118,3 +118,50 @@ sequenceDiagram
 3. **Uncertainty goes to a human.** Validation failures, unverified evidence, partial parses, truncated input, and unscored applicants go to `needs_review`, never to auto-reject.
 4. **Append-only history.** Audit events and overrides cannot be updated or deleted (SQLite triggers plus an ORM guard).
 5. **Swap, don't rewrite.** New models change one env var; new file formats add one parser class.
+
+## Candidate side (added in the MVP build)
+
+The candidate side is a second set of pages in the same app. It shares the LLM layer and the four scoring
+categories with the employer side and nothing else: candidate tables have no foreign key to employer tables, and
+candidate pages never query them.
+
+```mermaid
+flowchart LR
+    C([Candidate])
+    LLM[[LLM via OpenRouter]]
+
+    P7((7.0<br/>Profile and consent))
+    P8((8.0<br/>Draft for a role))
+    G{{No-new-facts guard<br/>code, no AI}}
+    T[Fact template<br/>fallback]
+    P9((9.0<br/>Approve, save, compare))
+
+    D5[(D5 Candidate profiles<br/>and core facts)]
+    D6[(D6 Resume versions)]
+    D4[(D4 Audit log<br/>ids, counts, hashes only)]
+
+    C -- "consent, core facts" --> P7 --> D5
+    C -- "job description" --> P8
+    D5 -- "facts (no name or contact details)" --> P8
+    P8 -- "facts + job description" --> LLM
+    LLM -- "summary, skills, bullets" --> G
+    G -- "fails twice, or AI down" --> T --> G
+    G -- "passed draft" --> P9
+    C -- "approval" --> P9 --> D6
+    P8 -- "source, guard result" --> D4
+```
+
+Titles, employers, schools, and dates in a draft are printed from D5 by code. The model's output schema has no
+field for them. Details: [drafting_guard.md](drafting_guard.md).
+
+## Fit score with category weights
+
+```mermaid
+flowchart LR
+    S[0-4 criterion scores<br/>from the model] --> CS[Category score<br/>weighted average, 0-100]
+    W[Employer weights<br/>skills, education,<br/>certifications, experience] --> SH[Shares of the<br/>categories in use]
+    CS --> F[Fit score = sum of share x score<br/>minus must-have penalty]
+    SH --> F
+    F --> B[Breakdown stored on<br/>every evaluation]
+```
+

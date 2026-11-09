@@ -1,10 +1,14 @@
 # TalentSift
 
-**Employer-side AI resume screening with a ranked, explained, fully auditable shortlist.** A hiring manager pastes a
-job posting, approves an AI-drafted rubric, and screens a folder of resumes. Low scorers are auto-rejected with
-job-related reasons; every automated decision is logged and reversible.
+**Fair, explainable resume screening for employers, and a truthful drafting assistant for candidates.**
 
-Built as the MVP for a Systems Analysis & Design course project. Fictional data only.
+- **Employers:** paste a job posting, approve an AI-drafted rubric, weight skills, education, certifications, and
+  experience, and screen a folder of resumes. Names, street addresses, and ZIP codes are removed first. You get a
+  ranked shortlist with a score breakdown for every candidate, and every automated decision is logged and reversible.
+- **Candidates:** enter your core facts once, paste a job description, and get a resume draft that adds nothing
+  beyond those facts. Software checks every line, you approve every draft, and you can compare saved versions.
+
+Built as the MVP for the IDS 405 course project (Group 12). Fictional data only.
 
 ![Results page: ranked shortlist with must-have checklist and verified evidence quotes](docs/screenshots/results.png)
 
@@ -14,8 +18,8 @@ Built as the MVP for a Systems Analysis & Design course project. Fictional data 
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env                                    # leave the key empty to run offline
-pytest                                                  # ~190 tests, all offline
-python scripts/seed_demo.py --screen                    # 2 roles, 20 fictional resumes, 2 screening runs
+python -m pytest                                        # ~360 tests, all offline
+python scripts/seed_demo.py --screen                    # 2 roles, 26 fictional resumes, 2 screening runs
 streamlit run app.py
 ```
 
@@ -24,23 +28,38 @@ the sidebar if the network fails mid-presentation.
 
 ## What it does
 
+### Employer side
+
 | Page | What the manager does |
 |------|-----------------------|
-| **Roles** | Paste a posting or load it from a job-board link. The AI drafts 5-10 criteria (type, weight) and flags possible proxies for protected characteristics. Edit, approve, duplicate, version. Set the auto-reject threshold (default 40) and shortlist size (default 5). |
+| **Roles** | Paste a posting or load it from a job-board link. The AI drafts 5-10 criteria (type, weight, category) and flags possible proxies for protected characteristics. Set the four **category weights**, edit, approve, duplicate, version. Set the auto-reject threshold (default 40) and shortlist size (default 5). |
 | **Applicants** | Browse to a folder of resumes. A preview lists exactly which files will be sent (PDFs only; everything else is listed with the reason it is skipped). Or upload PDFs. Toggle the masked preview: exactly what the AI sees. |
 | **Screen** | Pick an approved role and batches, run, and watch progress, tokens, and cost. |
-| **Results** | Tabs for Shortlist, Not shortlisted, Auto-rejected, Needs review. Evidence quotes, must-have checklist, reasons, overrides, one-click reinstatement (reason required), confirm-mode approval. |
+| **Results** | Tabs for Shortlist, Not shortlisted, Auto-rejected, Needs review. A **score breakdown by category** for every candidate, evidence quotes, must-have checklist, reasons, overrides, one-click reinstatement (reason required), confirm-mode approval. |
 | **Audit** | Filter the append-only log, read raw prompts and replies, export CSV, run the consistency and name-swap fairness checks. |
-| **Settings** | Paste your OpenRouter API key and model. Stored in the local `.env`, shown masked, never logged. |
+| **Settings** | Paste your OpenRouter API key and **choose the AI model** (Claude by default). Stored in the local `.env`, shown masked, never logged. |
+
+### Candidate side
+
+| Page | What the candidate does |
+|------|-------------------------|
+| **Candidate Profile** | Read and accept the AI notice, then enter core facts: skills, education, certifications, experience. An access code (shown once) reopens the profile. Delete everything at any time. |
+| **Candidate Draft** | Paste a job description. The assistant drafts from the facts only; the **no-new-facts check** runs on every line. Read the draft, tick the approval, and save it as a named version. |
+| **Candidate Versions** | List, open, download, and delete saved versions. Compare any two side by side. |
+
+Candidate profiles are separate from employer data. Employers cannot see them; candidates cannot see roles,
+applicants, or results. How the check works, and its limits: [docs/drafting_guard.md](docs/drafting_guard.md).
 
 ## How decisions are made
 
 1. **Mask first.** Names, emails, phones, addresses and ZIP codes, URLs and handles, and image content are removed
-   in code. The model only sees masked text and a label such as "Applicant 07".
+   in code. The model only sees masked text and a label such as "Applicant 07". A resume whose name could not be
+   found and masked is not sent to the model at all: it goes to Needs review.
 2. **The model scores; code decides.** One call per applicant at temperature 0 returns a 0-4 score, rationale, and
    verbatim quotes for each criterion. Every quote is checked against the masked resume.
-3. **Fit score (0-100)** = weighted average of criterion scores (high 3, medium 2, low 1), minus
-   `MUST_HAVE_PENALTY` (15) points per must-have scored 0-1, never below 0.
+3. **Fit score (0-100).** Each category's score is the weighted average of its criteria (high 3, medium 2, low 1).
+   The category scores are combined by the employer's weights, minus `MUST_HAVE_PENALTY` (15) points per
+   must-have scored 0-1, never below 0. Worked example: [docs/employer_upgrade_design.md](docs/employer_upgrade_design.md).
 4. **Ranking**: fit score, then must-haves met, then applicant id. Never by name.
 5. **Status**: top N at or above the threshold are shortlisted (exact ties at the cutoff included); below the
    threshold is auto-rejected; everyone else is not shortlisted.
@@ -68,7 +87,7 @@ cannot be read; the app says so, and you paste the posting instead. Only public 
 ## Use a real model through OpenRouter
 
 1. Create a key at [openrouter.ai](https://openrouter.ai) and set a spending limit on it.
-2. Open **Settings** in the app, paste the key and a model slug, and click **Save and use OpenRouter**. The key is
+2. Open **Settings** in the app, paste the key, choose a model, and click **Save and use OpenRouter**. The key is
    written to the local `.env` (gitignored) and applied immediately. Or edit `.env` by hand:
    `LLM_PROVIDER=openrouter`, `OPENROUTER_API_KEY=...`, `LLM_MODEL=<any OpenRouter slug>`.
 3. Run `python scripts/seed_demo.py --reset --screen --provider openrouter`, or pick "OpenRouter" in the app sidebar.
@@ -90,18 +109,36 @@ review. Re-runs reuse cached results at no cost; "Force re-score" bypasses the c
 |----------|---------|---------|
 | `LLM_PROVIDER` | `openrouter` if a key is set, else `fake` | `openrouter` or `fake` |
 | `OPENROUTER_API_KEY` | (empty) | OpenRouter key; never committed or logged |
-| `LLM_MODEL` | (empty) | OpenRouter model slug |
+| `LLM_MODEL` | (empty) | OpenRouter model id. The Settings page offers a short list (`talentsift/model_catalog.py`) |
 | `LLM_TIMEOUT_SECONDS` / `LLM_MAX_TOKENS` | 60 / 4000 | Per-call limits |
 | `LLM_CONCURRENCY` | 4 | Parallel AI calls during a run |
 | `COST_CAP_USD` | 2.00 | Per-batch spending cap |
 | `AUTO_REJECT_MODE` | `automatic` | `automatic` or `confirm` |
 | `MUST_HAVE_PENALTY` | 15 | Points per unmet must-have |
 | `MASK_GRAD_YEARS` | `false` | Also mask years in the education section |
+| `REQUIRE_NAME_MASK` | `true` | Keep a resume away from the model when its name could not be masked |
 | `MAX_RESUME_CHARS` | 24000 | Longer resumes are truncated and sent to review |
-| `DATABASE_URL` | `sqlite:///data/talentsift.db` | SQLite file (relative paths resolve to the project root) |
+| `TALENTSIFT_DATA_DIR` | `./data` | One folder for the database, uploaded resumes, and backups. Point it outside the code folder on a server |
+| `DATABASE_URL` / `UPLOAD_DIR` / `BACKUP_DIR` | under the data folder | Set the pieces one by one (these win over `TALENTSIFT_DATA_DIR`) |
+| `BACKUP_KEEP` | 14 | Backups kept by `scripts/backup.py` |
+| `ALLOW_FOLDER_IMPORT` / `IMPORT_ROOT` | `true` / (none) | Turn folder import off, or limit it to one folder, on a shared install |
 | `AUTO_SEED_DEMO` | `false` | Load and screen the demo data when the database is empty |
 
 Temperature is fixed at 0 in code on purpose.
+
+## Self-hosted install and backups
+
+The MVP ships as a self-hosted package: one employer organization per install, on your own VM, with your own
+OpenRouter key. Step-by-step install, the systemd service, nightly backups, and restore are in
+[docs/install.md](docs/install.md). The short version:
+
+```bash
+python scripts/backup.py            # database snapshot + uploaded resumes -> one archive, oldest pruned
+python scripts/backup.py --list
+python scripts/backup.py --restore data/backups/talentsift-YYYYMMDD-HHMMSS.tar.gz   # stop the app first
+```
+
+Updating an existing install is safe: on start, missing database columns are added in place.
 
 ## Optional: hosted demo on Streamlit Community Cloud
 
@@ -149,13 +186,16 @@ Then add `TxtParser()` to `_PARSERS` in `talentsift/parsers/registry.py` and a t
 
 ```
 app.py                 Home page (entry point)
-pages/                 Roles, Applicants, Screen, Results, Audit
-talentsift/            config, db, models, schemas, parsers/, masking, ingest, llm/, prompts,
-                       rubric, roles, scoring, overrides, fairness, audit, demo, ui
-prompts/               screen_v1.md, rubric_draft_v1.md (versioned; never edit in place)
-scripts/               make_sample_resumes.py, seed_demo.py
-data/resumes/samples/  20 fictional resumes (everything else in data/ is gitignored)
-docs/                  plan (WBS), requirements, traceability, decisions, architecture
+pages/                 Employer: Roles, Applicants, Screen, Results, Audit, Settings
+                       Candidate: Candidate Profile, Candidate Draft, Candidate Versions
+talentsift/            config, db, models, schemas, parsers/, masking, ingest, llm/, prompts, model_catalog,
+                       rubric, roles, scoring, overrides, fairness, audit, demo, backup, ui,
+                       candidates, guard, draft_template, drafting, textutil
+prompts/               screen_v1.md, rubric_draft_v2.md, resume_draft_v1.md (versioned; never edit in place)
+scripts/               make_sample_resumes.py, seed_demo.py, backup.py
+data/resumes/samples/  26 fictional resumes (everything else in data/ is gitignored)
+docs/                  plan, requirements, traceability, decisions, architecture, prototype audit, guard spec,
+                       employer design, wireframes, deployment memo, install guide, UAT and demo scripts
 tests/                 pytest suite, run in CI on every pull request
 ```
 
@@ -164,7 +204,13 @@ Ownership for parallel work (data, AI, UX owners) is in [CONTRIBUTING.md](CONTRI
 ## Process artifacts (SDLC)
 
 - [docs/plan.md](docs/plan.md): plan, WBS, file tree, build sequence, risks
-- [docs/requirements.md](docs/requirements.md): FR-1..FR-28, NFR-1..NFR-12
+- [docs/requirements.md](docs/requirements.md): FR-1..FR-44, NFR-1..NFR-15
+- [docs/prototype_audit.md](docs/prototype_audit.md): SOW gap analysis and the defect backlog
+- [docs/drafting_guard.md](docs/drafting_guard.md), [docs/employer_upgrade_design.md](docs/employer_upgrade_design.md),
+  [docs/candidate_wireframes.md](docs/candidate_wireframes.md): design
+- [docs/deployment_memo.md](docs/deployment_memo.md), [docs/install.md](docs/install.md): deployment
+- [docs/validation_report.md](docs/validation_report.md), [docs/uat_script.md](docs/uat_script.md),
+  [docs/demo_script.md](docs/demo_script.md): validation, UAT, and the presentation demo
 - [docs/traceability.md](docs/traceability.md): requirement -> module -> test, plus the definition of done
 - [docs/decisions.md](docs/decisions.md): dated decision log
 - [docs/architecture.md](docs/architecture.md): context diagram, Level-0 DFD, screening sequence (Mermaid)
@@ -174,18 +220,26 @@ Ownership for parallel work (data, AI, UX owners) is in [CONTRIBUTING.md](CONTRI
 ## Known limitations
 
 - **Formats**: text-based PDFs only. DOCX is a stub; scanned PDFs are flagged `needs_ocr` and skipped.
-- **Name masking is a heuristic.** It takes the name from the first line and masks every later capitalized
-  occurrence. If line one is not the name, the name is missed; capitalized words that match a name (for example
-  "Grant") are over-masked. Other signals can remain (affinity groups, locations without ZIP codes, pronouns).
+- **Name masking is a heuristic.** It looks for the name in the header block and masks every later capitalized
+  occurrence. Single-word names and names split across lines are not found; those resumes are held for human
+  review instead of being sent. Capitalized words that match a name (for example "Grant") are over-masked. Other
+  signals can remain (affinity groups, city and state without a ZIP code, pronouns).
 - **Address and phone masking** target US-style addresses with ZIP codes, North American numbers, and "+"
-  international numbers.
+  international numbers. Canadian and UK postcodes are masked in the header block only.
+- **The no-new-facts check compares words, not meaning.** It blocks new skills, tools, numbers, credentials, and
+  posting terms, but a misleading sentence built only from the candidate's own words can pass. That is why the
+  candidate must approve every draft. Details: [docs/drafting_guard.md](docs/drafting_guard.md).
+- **Candidate access codes cannot be recovered**, and anyone with the code can open the profile. There are no
+  accounts in the MVP.
+- **Model ids in the Settings list are unverified** against OpenRouter's live catalog. Check them before release.
 - **Evidence checks prove a quote exists, not that it supports the score.** Reviewers should still read them.
 - **The offline client is a keyword matcher** for tests and demos, not a real assessment.
 - **Cost cap** relies on the cost OpenRouter reports, and can overshoot by the calls already in flight.
 - **Ties enlarge the shortlist.** Applicants tied with the N-th score are all shortlisted rather than split by upload
   order, so "top 5" can show 6 or more when scores tie ([D-009](docs/decisions.md)).
 - **Overrides belong to a run.** A new screening run makes fresh automated decisions.
-- **Single user, no authentication, local SQLite.** Planned for the final project along with OCR, DOCX, emailing
-  candidates, ATS integrations, side-by-side compare, and fairness dashboards.
+- **No authentication, local SQLite, one employer organization per install.** Deferred past the Nov 18
+  presentation: DOCX, OCR, a per-run model picker, scoring candidate versions against a role (A/B), improvement
+  suggestions, and PDF export. Production roadmap: accounts, managed database, hosted subscription.
 - **Live OpenRouter run**: the client is verified against mocked HTTP in the test suite; run the OpenRouter
   command above with your key to complete the live check.
