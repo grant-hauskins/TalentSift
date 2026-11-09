@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Category weights.** Every criterion belongs to skills, education, certifications, or experience. The manager
+  weights the four categories on the Roles page; the fit score combines category scores by those weights.
+- **Score breakdown** by category for every candidate on Results; each run records the weights it used.
+- **Model list** on Settings with Claude as the default, plus any other OpenRouter model id.
+- **Candidate side**: profile with AI notice and consent, core facts, a fact-anchored drafting assistant with a
+  no-new-facts guard, approve-and-save versions, and side-by-side compare. Three new pages.
+- **Backups**: `scripts/backup.py` (snapshot, rotate, verify, restore) and `TALENTSIFT_DATA_DIR`.
+- **Schema upgrade in place**: an existing database gains new columns on start.
+- Six more fictional sample resumes (26 in total); sample postings now use all four categories.
+- `ALLOW_FOLDER_IMPORT` and `IMPORT_ROOT` for shared installs; `REQUIRE_NAME_MASK`.
+
+### Fixed
+- **Masking**: names, street addresses, and ZIP codes survived in common header layouts (name with a phone or
+  email on the same line, "Last, First", ALL-CAPS addresses, full state names, bare ZIP codes, and more). See
+  `docs/prototype_audit.md`. A resume whose name cannot be masked is no longer sent to the model.
+- Masking no longer hides job text such as "15 Court filings", "EN 50128", "socket.io", or "@Google".
+- Empty or non-PDF uploads no longer become applicants.
+- The consistency check now re-scores with the run's own penalty and model.
+- Job-link import no longer shows a traceback on malformed links.
+- The folder browser no longer crashes on `~user` or an empty path.
+
+### Changed
+- Rubric drafting uses `rubric_draft_v2` (adds a category per criterion).
+- Sample roles ship with category weights and an auto-reject threshold of 35.
+- File databases use write-ahead logging and a busy timeout, for a few concurrent users.
+
 - **Settings page**: enter and store the OpenRouter API key and model in the app. Saved to the gitignored `.env`,
   applied without a restart, shown masked, never written to the database or audit log. The sidebar links to it
   when a key is missing.

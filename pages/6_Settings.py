@@ -5,6 +5,7 @@ import streamlit as st
 from talentsift import credentials, ui
 from talentsift.credentials import CredentialError, clear_api_key, key_warning, mask_key, save_api_settings
 from talentsift.llm import describe_provider
+from talentsift.model_catalog import DEFAULT_MODEL, MODEL_CATALOG, OTHER, catalog_slugs, find, label_for
 
 settings = ui.page_setup(
     "Settings",
@@ -29,11 +30,22 @@ with st.form("api_settings", clear_on_submit=True):
         placeholder="sk-or-..." if not settings.openrouter_api_key else "Leave blank to keep the stored key",
         help="Create a key at openrouter.ai/keys and set a spending limit on it.",
     )
-    model = st.text_input(
-        "Model slug",
-        value=settings.llm_model or "openai/gpt-4o-mini",
-        help="Any OpenRouter model slug. Models with structured-output support work best.",
+    current_model = settings.llm_model or DEFAULT_MODEL
+    choices = catalog_slugs() + [OTHER]
+    picked = st.selectbox(
+        "AI model for scoring",
+        choices,
+        index=choices.index(current_model) if current_model in choices else len(choices) - 1,
+        format_func=lambda slug: "Other (enter an OpenRouter model id below)" if slug == OTHER else label_for(slug),
+        help="Claude is the default. Every screening run records the model it used, and cached scores are kept per model.",
     )
+    custom_model = st.text_input(
+        "Other model id (used only when 'Other' is selected)",
+        value="" if find(current_model) else current_model,
+        placeholder="vendor/model-name",
+        help="Any OpenRouter model id. Models with structured-output support work best.",
+    )
+    model = custom_model if picked == OTHER else picked
     saved = st.form_submit_button("Save and use OpenRouter", type="primary")
 
 if saved:
@@ -54,6 +66,13 @@ if settings.openrouter_api_key and st.button("Remove stored key", help="Deletes 
     ui.switch_provider("fake")
     st.session_state.settings_flash = "Key removed. The app is using the offline fake client."
     st.rerun()
+
+with st.expander("Which model should I pick?"):
+    st.markdown("\n".join(f"- **{option.label}** (`{option.slug}`): {option.note}" for option in MODEL_CATALOG))
+    st.caption(
+        "Changing the model never changes past results. Scores are cached per model, so switching back reuses "
+        "the earlier scores at no cost."
+    )
 
 with st.expander("Where is the key stored?"):
     st.markdown(

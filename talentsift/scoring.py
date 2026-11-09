@@ -19,14 +19,17 @@ import threading
 import unicodedata
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Callable, Iterator, Sequence
+from typing import Callable, Iterator, Mapping, Sequence
 
 from sqlmodel import Session, select
 
 from talentsift.audit import log_event, log_llm_attempts, sha256_text
 from talentsift.config import Settings
+from talentsift.masking import name_was_masked
 from talentsift.llm.base import LLMClient, ValidatedCall, call_with_validation, extract_json_object, schema_name
 from talentsift.models import (
+    CATEGORIES,
+    DEFAULT_CATEGORY,
     PARSE_PARTIAL,
     RUN_COMPLETED,
     RUN_FAILED,
@@ -63,6 +66,7 @@ FLAG_EVIDENCE_UNVERIFIED = "evidence_unverified"
 FLAG_PARTIAL_PARSE = "partial_parse"
 FLAG_NOT_PARSED = "not_parsed"
 FLAG_TRUNCATED = "input_truncated"
+FLAG_NAME_NOT_MASKED = "name_not_masked"  # masking could not find the name: the model never sees this resume
 
 
 class ScreeningError(RuntimeError):
@@ -78,6 +82,29 @@ class CriterionResult:
     type: str  # must_have | nice_to_have
     weight: str  # high | medium | low
     score: int  # 0-4
+    category: str = DEFAULT_CATEGORY  # skills | education | certifications | experience
+
+
+@dataclass(frozen=True)
+class CategoryResult:
+    """One line of the score breakdown: how a category scored and what it added to the fit score."""
+
+    category: str
+    weight: int  # the employer's weight for this category, as entered
+    share: float  # that weight as a share of the categories this rubric uses (0-1)
+    score: float | None  # 0-100 weighted average of the category's criteria; None if it has no criteria
+    points: float  # share x score: what this category adds to the fit score before any penalty
+    criteria_count: int
+
+    def as_dict(self) -> dict:
+        return {
+            "category": self.category,
+            "weight": self.weight,
+            "share_pct": round(100 * self.share, 1),
+            "score": None if self.score is None else round(self.score, 1),
+            "points": round(self.points, 1),
+            "criteria_count": self.criteria_count,
+        }
 
 
 @dataclass(frozen=True)
@@ -88,13 +115,50 @@ class FitResult:
     must_haves_met: int
     must_haves_total: int
     unmet_must_have_ids: tuple[int, ...]
+    categories: tuple[CategoryResult, ...] = ()  # the breakdown, in the fixed CATEGORIES order
+
+    def breakdown(self) -> list[dict]:
+        return [c.as_dict() for c in self.categories]
 
 
-def compute_fit_score(results: Sequence[CriterionResult], must_have_penalty: float) -> FitResult:
-    """Weighted average of 0-4 scores scaled to 0-100, minus a penalty per unmet must-have (floor 0)."""
-    max_points = sum(WEIGHT_POINTS[r.weight] * MAX_SCORE for r in results)
-    points = sum(WEIGHT_POINTS[r.weight] * r.score for r in results)
-    raw = 100.0 * points / max_points if max_points else 0.0
+def compute_fit_score(
+    results: Sequence[CriterionResult],
+    must_have_penalty: float,
+    category_weights: Mapping[str, int] | None = None,
+) -> FitResult:
+    """Category-weighted fit score, 0-100, minus a penalty per unmet must-have (floor 0).
+
+    1. Within each category, the score is the weighted average of its 0-4 criterion scores
+       (high = 3, medium = 2, low = 1), scaled to 0-100.
+    2. The employer's category weights are turned into shares of the categories this rubric actually
+       uses, so a category with no criteria never drags the score down.
+    3. Fit score = sum of share x category score, minus `must_have_penalty` per must-have scored 0-1.
+
+    With every criterion in one category (or no weights given and one category) this is exactly the
+    plain weighted average of the original prototype.
+    """
+    weights = {c: int((category_weights or {}).get(c, 1)) for c in CATEGORIES}
+    by_category: dict[str, list[CriterionResult]] = {c: [] for c in CATEGORIES}
+    for r in results:
+        by_category[r.category if r.category in by_category else DEFAULT_CATEGORY].append(r)
+    used_weight = sum(weights[c] for c in CATEGORIES if by_category[c])
+    if used_weight <= 0:  # every used category weighted 0: fall back to equal shares rather than divide by zero
+        weights = {c: 1 for c in CATEGORIES}
+        used_weight = sum(1 for c in CATEGORIES if by_category[c])
+
+    categories: list[CategoryResult] = []
+    raw = 0.0
+    for category in CATEGORIES:
+        items = by_category[category]
+        if not items:
+            categories.append(CategoryResult(category, weights[category], 0.0, None, 0.0, 0))
+            continue
+        max_points = sum(WEIGHT_POINTS[r.weight] * MAX_SCORE for r in items)
+        points = sum(WEIGHT_POINTS[r.weight] * r.score for r in items)
+        score = 100.0 * points / max_points
+        share = weights[category] / used_weight
+        raw += share * score
+        categories.append(CategoryResult(category, weights[category], share, score, share * score, len(items)))
     must_haves = [r for r in results if r.type == "must_have"]
     unmet = tuple(r.criterion_id for r in must_haves if r.score <= UNMET_MUST_HAVE_MAX_SCORE)
     penalty = must_have_penalty * len(unmet)
@@ -105,6 +169,7 @@ def compute_fit_score(results: Sequence[CriterionResult], must_have_penalty: flo
         must_haves_met=len(must_haves) - len(unmet),
         must_haves_total=len(must_haves),
         unmet_must_have_ids=unmet,
+        categories=tuple(categories),
     )
 
 
@@ -271,6 +336,15 @@ class _Budget:
                 self.stop_message = f"The AI provider rejected the request: {call.fatal_error}"
 
 
+def _name_exposed(applicant: Applicant, settings: Settings) -> bool:
+    """True when a readable resume has no masked name: its text may still contain the applicant's name."""
+    return (
+        settings.require_name_mask
+        and applicant.parse_status in SCREENABLE_PARSE_STATUSES
+        and not name_was_masked(applicant.masked_text)
+    )
+
+
 def criteria_prompt_json(criteria: Sequence[Criterion]) -> str:
     """The rubric as the model sees it. Weights stay out: they are applied in code, not by the model."""
     rows = [{"criterion_id": c.id, "name": c.name, "description": c.description, "type": c.type} for c in criteria]
@@ -330,7 +404,14 @@ def _call_worker(job: _Job, client: LLMClient, system: str, budget: _Budget, exp
     return call
 
 
-def _apply_output(scored: ScoredApplicant, job: _Job, output: ScreeningOutput, criteria: Sequence[Criterion], settings: Settings) -> None:
+def _apply_output(
+    scored: ScoredApplicant,
+    job: _Job,
+    output: ScreeningOutput,
+    criteria: Sequence[Criterion],
+    settings: Settings,
+    category_weights: Mapping[str, int] | None = None,
+) -> None:
     """Verify evidence, compute the fit score, and set guardrail flags."""
     normalized = normalize_for_match(job.resume_text)
     by_id = {item.criterion_id: item for item in output.criteria}
@@ -345,8 +426,12 @@ def _apply_output(scored: ScoredApplicant, job: _Job, output: ScreeningOutput, c
         for c in criteria
     ]
     scored.fit = compute_fit_score(
-        [CriterionResult(ch.criterion.id, ch.criterion.type, ch.criterion.weight, ch.score) for ch in scored.checks],
+        [
+            CriterionResult(ch.criterion.id, ch.criterion.type, ch.criterion.weight, ch.score, ch.criterion.category)
+            for ch in scored.checks
+        ],
         settings.must_have_penalty,
+        category_weights,
     )
     unverified = sum(1 for ch in scored.checks for q in ch.quotes if not q.verified)
     if unverified:
@@ -385,9 +470,10 @@ def iter_scored(
     context = context or {}
     expected_ids = [c.id for c in criteria]
     digest = rubric_hash(role, criteria)
+    category_weights = role.category_weights
     jobs: list[_Job | None] = []
     for applicant in applicants:
-        if applicant.parse_status not in SCREENABLE_PARSE_STATUSES:
+        if applicant.parse_status not in SCREENABLE_PARSE_STATUSES or _name_exposed(applicant, settings):
             jobs.append(None)
             continue
         job = _build_job(applicant, role, criteria, prompt, settings, client.model, digest)
@@ -406,6 +492,13 @@ def iter_scored(
             label = {"display_label": applicant.display_label, **context}
             ids = dict(run_id=run_id, role_id=role.id, applicant_id=applicant.id)
 
+            if job is None and _name_exposed(applicant, settings):
+                scored.flags[FLAG_NAME_NOT_MASKED] = (
+                    "The applicant's name could not be found and masked, so this resume was not sent to the AI. "
+                    "Review it by hand."
+                )
+                yield scored
+                continue
             if job is None:
                 scored.flags[FLAG_NOT_PARSED] = (
                     applicant.parse_message or f"The resume could not be parsed ({applicant.parse_status})."
@@ -428,7 +521,7 @@ def iter_scored(
                     payload={**label, "cached": True, "source_evaluation_id": job.cached.id, "cache_key": job.cache_key},
                     **ids,
                 )
-                _apply_output(scored, job, job.cached_output, criteria, settings)
+                _apply_output(scored, job, job.cached_output, criteria, settings, category_weights)
             else:
                 call: ValidatedCall | None = futures[index].result()
                 if call is None:
@@ -450,7 +543,7 @@ def iter_scored(
                         **ids,
                     )
                     if call.ok:
-                        _apply_output(scored, job, call.value, criteria, settings)
+                        _apply_output(scored, job, call.value, criteria, settings, category_weights)
                     elif call.attempts[-1].call_error:
                         scored.flags[FLAG_LLM_ERROR] = f"The AI call failed: {call.attempts[-1].call_error}"
                     else:
@@ -479,6 +572,7 @@ def iter_scored(
 def _criterion_line(check: CriterionCheck) -> dict:
     return {
         "criterion": check.criterion.name,
+        "category": check.criterion.category,
         "type": check.criterion.type,
         "score": check.score,
         "rationale": check.rationale,
@@ -535,6 +629,7 @@ def build_reasons(scored: ScoredApplicant, decision: Decision, *, threshold: flo
         "headline": headline,
         "explanation": explanation,
         "fit_score": fit,
+        "category_breakdown": scored.fit.breakdown() if scored.fit else [],
         "threshold": threshold,
         "top_n": top_n,
         "rank": decision.rank,
@@ -562,6 +657,7 @@ def _save_evaluation(session: Session, run: ScreeningRun, scored: ScoredApplican
         summary=output.summary if output else "",
         strengths_json=dumps(output.strengths if output else []),
         gaps_json=dumps(output.gaps if output else []),
+        breakdown_json=dumps(scored.fit.breakdown() if scored.fit else []),
         flags_json=dumps([{"flag": code, "detail": detail} for code, detail in scored.flags.items()]),
         model_used=scored.model_used,
         provider_used=scored.provider_used,
@@ -601,6 +697,7 @@ def _save_evaluation(session: Session, run: ScreeningRun, scored: ScoredApplican
                 "fit_score": scored.fit.fit_score,
                 "raw_score": scored.fit.raw_score,
                 "penalty_points": scored.fit.penalty_points,
+                "category_breakdown": scored.fit.breakdown(),
                 "must_haves_met": scored.fit.must_haves_met,
                 "must_haves_total": scored.fit.must_haves_total,
                 "from_cache": scored.from_cache,
@@ -610,6 +707,7 @@ def _save_evaluation(session: Session, run: ScreeningRun, scored: ScoredApplican
                         "criterion_id": c.criterion.id,
                         "type": c.criterion.type,
                         "weight": c.criterion.weight,
+                        "category": c.criterion.category,
                         "score": c.score,
                         "evidence_verified": c.verified,
                     }
@@ -723,6 +821,7 @@ def run_screening(
         top_n=role.top_n,
         auto_reject_mode=settings.auto_reject_mode,
         must_have_penalty=settings.must_have_penalty,
+        category_weights_json=dumps(role.category_weights),
         cost_cap_usd=settings.cost_cap_usd,
         force_rescore=force_rescore,
         status=RUN_RUNNING,
@@ -750,6 +849,7 @@ def run_screening(
                 "top_n": run.top_n,
                 "auto_reject_mode": run.auto_reject_mode,
                 "must_have_penalty": run.must_have_penalty,
+                "category_weights": role.category_weights,
                 "cost_cap_usd": run.cost_cap_usd,
                 "temperature": settings.llm_temperature,
             },

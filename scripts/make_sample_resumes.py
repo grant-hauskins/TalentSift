@@ -31,8 +31,9 @@ ROLE_DIR = ROOT / "data" / "samples" / "roles"
 ROLES = {
     "business_data_analyst": {
         "title": "Business Data Analyst",
-        "auto_reject_threshold": 40,
+        "auto_reject_threshold": 35,
         "top_n": 5,
+        "category_weights": {"skills": 60, "experience": 20, "education": 15, "certifications": 5},
         "posting_text": """Business Data Analyst
 Fictional Foods Co. is hiring a Business Data Analyst to turn sales and supply data into decisions for store and finance leaders.
 
@@ -50,12 +51,16 @@ Nice to have:
 - Python with pandas for data cleaning
 - A/B testing and statistics
 - Data warehouse or ETL pipelines
+- Bachelor's degree in business, analytics, statistics, or economics
+- 2+ years as a data analyst in retail
+- Certified Analytics Professional (CAP) or similar certification
 """,
     },
     "operations_coordinator": {
         "title": "Operations Coordinator",
-        "auto_reject_threshold": 40,
+        "auto_reject_threshold": 35,
         "top_n": 3,
+        "category_weights": {"skills": 60, "experience": 30, "education": 0, "certifications": 10},
         "posting_text": """Operations Coordinator
 Fictional Freight Partners needs an Operations Coordinator to keep warehouse schedules, vendors, and inventory running smoothly.
 
@@ -74,6 +79,8 @@ Nice to have:
 - ERP systems such as SAP or NetSuite
 - Event planning
 - Recent graduate preferred
+- 2+ years as an operations coordinator or warehouse coordinator
+- Forklift or OSHA safety certification
 """,
     },
 }
@@ -266,6 +273,43 @@ RESUMES = [
            "Inventory clerk. This whole resume is a scanned image.",
            _jobs(("Inventory Clerk", "Example Depot, 2019 - 2025", [B["inventory"], B["vendor_weak"]])),
            ["High School Diploma, Example High School, 2018"], "Inventory", image_only=True),
+    # --- Extra mid-range and unrelated applicants: the demo batch is 26, above the 25-resume success criterion ---
+    Resume("21_drew_specimen.pdf", "Drew Specimen", "drew.specimen@example.com", "(312) 555-0121",
+           "2121 Example Court, Anytown, OH 43021",
+           "Reporting associate who supports a regional sales team.",
+           _jobs(("Reporting Associate", "Mock Markets, 2022 - 2025", [B["sql_weak"], B["excel"], B["present_weak"]])),
+           ["B.A. Business Administration, Fictional College, 2022"],
+           "Excel, SQL"),
+    Resume("22_jamie_proxyford.pdf", "Jamie Proxyford", "jamie.proxyford@example.com", "(614) 555-0122",
+           "2222 Sample Road, Anytown, OH 43022",
+           "Warehouse associate moving into coordination work.",
+           _jobs(("Warehouse Associate", "Fictional Freight Partners, 2021 - 2025", [B["inventory_mid"], B["sched_weak"], B["vendor_weak"]])),
+           ["High School Diploma, Example High School, 2020"],
+           "Inventory, scheduling"),
+    Resume("23_alex_demoson.pdf", "Alex Demoson", "alex.demoson@example.com", "(614) 555-0123",
+           "2323 Placeholder Lane, Anytown, OH 43023",
+           "Cafe shift lead with a friendly, steady approach to service.",
+           _jobs(("Shift Lead", "Example Coffee House, 2020 - 2025", [B["barista"], B["service"]])),
+           ["A.A. Liberal Arts, Example Community College, 2020"],
+           "Customer service, cash handling"),
+    Resume("24_robin_mockwell.pdf", "Robin Mockwell", "robin.mockwell@example.com", "(312) 555-0124",
+           "2424 Demo Avenue, Anytown, OH 43024",
+           "Junior analyst with dashboard and spreadsheet experience.",
+           _jobs(("Junior Analyst", "Placeholder Pantry, 2023 - 2025", [B["dash_weak"], B["excel_weak"], B["present_weak"], B["python"]])),
+           ["B.S. Information Systems, Example State University, 2023"],
+           "Excel, Tableau, Python"),
+    Resume("25_cameron_fauxley.pdf", "Cameron Fauxley", "cameron.fauxley@example.com", "(614) 555-0125",
+           "2525 Example Boulevard, Anytown, OH 43025",
+           "Office coordinator who plans events and keeps supplies stocked.",
+           _jobs(("Office Coordinator", "Sample Insurance Group, 2019 - 2025", [B["event"], B["inventory_mid"], B["sched_weak"]])),
+           ["B.A. Communications, Fictional College, 2019"],
+           "Event planning, scheduling"),
+    Resume("26_peyton_trialman.pdf", "Peyton Trialman", "peyton.trialman@example.com", "(312) 555-0126",
+           "2626 Sample Terrace, Anytown, OH 43026",
+           "Print designer with brand and layout experience.",
+           _jobs(("Print Designer", "Mock Media Studio, 2018 - 2025", [B["print"], B["design"]])),
+           ["B.F.A. Design, Example Arts College, 2018"],
+           "Adobe Illustrator, InDesign"),
 ]
 
 

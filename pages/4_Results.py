@@ -73,12 +73,29 @@ def reasons_block(evaluation) -> None:
             st.markdown(f"- {item['criterion']} ({item['score']}/4): {item['rationale']}")
 
 
+def breakdown_block(evaluation) -> None:
+    """Score breakdown by category: category score x the employer's weight = points toward the fit score."""
+    breakdown = loads(evaluation.breakdown_json, default=[])
+    if not breakdown or evaluation.fit_score is None:
+        return
+    st.markdown("**Score breakdown**")
+    st.dataframe(pd.DataFrame(ui.breakdown_rows(breakdown)), hide_index=True, width="stretch")
+    subtotal = sum(item["points"] for item in breakdown)
+    penalty = round(subtotal - evaluation.fit_score, 1)
+    line = f"Category points add up to {subtotal:.1f}."
+    if penalty > 0.05:
+        unmet = evaluation.must_haves_total - evaluation.must_haves_met
+        line += f" Minus {penalty:.1f} for {unmet} must-have(s) without enough evidence = fit score {evaluation.fit_score:.1f}."
+    st.caption(line)
+
+
 def detail(evaluation, applicant, rows) -> None:
     with st.expander("Candidate detail"):
         st.caption(
             f"File: {applicant.original_filename} · batch {applicant.batch} · model {evaluation.model_used or '—'} "
             f"via {evaluation.provider_used or '—'}{' · served from cache' if evaluation.from_cache else ''}"
         )
+        breakdown_block(evaluation)
         if evaluation.auto_status != evaluation.status:
             st.info(f"Automated decision: {ui.status_label(evaluation.auto_status)} · changed by a manager to {ui.status_label(evaluation.status)}.")
         if rows:
@@ -87,6 +104,7 @@ def detail(evaluation, applicant, rows) -> None:
                     [
                         {
                             "criterion": c.name,
+                            "category": c.category,
                             "type": c.type.replace("_", " "),
                             "weight": c.weight,
                             "score": f"{s.score}/4",
@@ -156,6 +174,9 @@ with ui.db_session() as session:
         f"threshold {run.auto_reject_threshold} · top {run.top_n} · mode {run.auto_reject_mode} · "
         f"{run.total_tokens:,} tokens · ${run.total_cost:.4f} · {run.cache_hits} cached"
     )
+    run_weights = loads(run.category_weights_json, default={})
+    if run_weights:
+        st.caption("Employer weights for this run: " + ui.weights_caption(run_weights, {c.category for c in criteria}))
     if run.status != "completed":
         st.error(f"This run {run.status.replace('_', ' ')}: {run.status_message}")
 
@@ -212,6 +233,8 @@ with ui.db_session() as session:
                         st.markdown(evidence_lines(s, limit=1), unsafe_allow_html=True)
                     if not strong:
                         st.caption("No criterion scored 3 or higher.")
+                if caption := ui.breakdown_caption(loads(e.breakdown_json, default=[])):
+                    st.caption(f"Score breakdown (category score × employer weight): {caption}")
                 if e.summary:
                     st.caption(e.summary)
                 detail(e, a, rows)

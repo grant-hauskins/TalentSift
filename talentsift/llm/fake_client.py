@@ -7,6 +7,7 @@ It reads the same prompt a real model receives and answers with explainable keyw
   evidence quotes, so they always verify.
 * Rubric drafting: bullet points under "Requirements"-style headings become must-haves, bullets under
   "Preferred"-style headings become nice-to-haves, and known proxy phrases are flagged.
+* Resume drafting: the candidate's own fact wording, reordered by relevance to the target role.
 
 For tests it can also replay scripted replies (`script`) or alter its own replies (`tamper`).
 """
@@ -21,54 +22,13 @@ from typing import Any, Callable
 from pydantic import BaseModel
 
 from talentsift.llm.base import LLMError, LLMResult, extract_json_object
-from talentsift.schemas import RubricDraft, ScreeningOutput
+from talentsift.schemas import ResumeDraft, RubricDraft, ScreeningOutput
+from talentsift.draft_template import FactView, template_draft
+from talentsift.textutil import keywords
 
 FAKE_MODEL = "fake/keyword-matcher-v1"
 
-# --- Text helpers ----------------------------------------------------------------------------------
-
-_STOPWORDS = {
-    "a", "an", "and", "or", "the", "of", "for", "to", "in", "on", "at", "by", "with", "from", "into", "as",
-    "is", "are", "be", "been", "being", "that", "this", "these", "those", "it", "its", "our", "your", "you",
-    "we", "they", "their", "who", "what", "which", "will", "can", "may", "must", "should", "would", "such",
-    "other", "than", "then", "per", "via", "etc", "e.g", "i.e", "and/or", "not", "no", "all", "any", "each",
-    "both", "more", "most", "least", "about", "over", "under", "up", "out", "also", "has", "have", "had",
-    "non", "my", "me", "i",
-}  # fmt: skip
-# Words that appear in almost every posting and say little about a specific skill.
-_GENERIC = {
-    "experience", "experienced", "ability", "able", "skill", "skills", "skilled", "strong", "work", "working",
-    "year", "years", "knowledge", "using", "use", "including", "related", "proficiency", "proficient",
-    "familiarity", "familiar", "excellent", "good", "great", "demonstrated", "plus", "preferred", "required",
-    "requirement", "candidate", "role", "team", "teams", "tool", "tools", "level", "based", "minimum",
-    "comfortable", "solid", "hands-on", "evidence", "resume", "applicant", "ideal", "background", "similar",
-}  # fmt: skip
-
-_TOKEN = re.compile(r"[a-z][a-z0-9+#]*(?:/[a-z0-9]+)?")
-
-
-def _stem(word: str) -> str:
-    if word.endswith("ies") and len(word) > 4:  # queries -> query
-        return word[:-3] + "y"
-    for suffix in ("ing", "ed", "es", "s"):
-        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
-            word = word[: -len(suffix)]
-            break
-    if word.endswith("e") and len(word) > 4:
-        word = word[:-1]
-    return word
-
-
-def keywords(text: str) -> list[str]:
-    """Distinct content words of a text, lightly stemmed, in order of first appearance."""
-    seen: dict[str, None] = {}
-    for token in _TOKEN.findall(text.lower()):
-        if len(token) < 2 or token in _STOPWORDS or token in _GENERIC:
-            continue
-        stem = _stem(token)
-        if stem not in _STOPWORDS and stem not in _GENERIC:
-            seen.setdefault(stem, None)
-    return list(seen)
+# --- Text helpers (shared with the drafting guard, see talentsift/textutil.py) --------------------------
 
 
 def _tag(text: str, tag: str) -> str:
@@ -207,6 +167,25 @@ def _criterion_name(bullet: str) -> str:
     return name[:1].upper() + name[1:]
 
 
+_CATEGORY_RULES: list[re.Pattern | tuple] = [
+    ("certifications", re.compile(r"\b(certifi\w+|licen[sc]\w+|credential\w*|accredit\w+)\b", re.I)),
+    ("certifications", re.compile(r"\b(PMP|CPA|CISSP|CAPM|SHRM-\w+)\b")),
+    ("education", re.compile(r"\b(degree|bachelor'?s?|master'?s (degree|in)|master of|ph\.?d|doctorate|diploma|"
+                             r"coursework|GED|high school)\b", re.I)),
+    ("education", re.compile(r"\b(B\.?[AS]\.?|M\.?[AS]\.?|MBA)(?=\s|,|$)")),  # case-sensitive: "as" is not a degree
+    ("experience", re.compile(r"\b(\d+\+?\s*(years?|yrs?)|years? of|experience (in|as|leading|managing|working)|"
+                              r"track record|background in|worked (in|as)|prior (role|experience))\b", re.I)),
+]
+
+
+def infer_category(text: str) -> str:
+    """Scoring category for a posting bullet: certifications, education, experience, else skills."""
+    for category, pattern in _CATEGORY_RULES:
+        if pattern.search(text):
+            return category
+    return "skills"
+
+
 def draft_rubric_offline(user_prompt: str) -> dict[str, Any]:
     """Draft a rubric from the posting in a rubric prompt (see prompts/rubric_draft_v1.md)."""
     posting = _tag(user_prompt, "job_posting")
@@ -264,6 +243,7 @@ def draft_rubric_offline(user_prompt: str) -> dict[str, Any]:
                 "description": text,
                 "type": kind,
                 "weight": weight,
+                "category": infer_category(text),
                 "proxy_risk": bool(note),
                 "proxy_note": note,
             }
@@ -273,6 +253,31 @@ def draft_rubric_offline(user_prompt: str) -> dict[str, Any]:
 
     summary = intro[0] if intro else f"Screening rubric drafted from the {title} posting."
     return {"role_title": title, "summary": summary[:300], "criteria": criteria}
+
+
+# --- Offline resume drafting ------------------------------------------------------------------------
+
+
+def draft_resume_offline(user_prompt: str) -> dict[str, Any]:
+    """Arrange the candidate's own words for the target role (see prompts/resume_draft_v1.md).
+
+    The offline "model" is the fact template: it reorders facts by relevance and never writes new wording.
+    """
+    facts = [
+        FactView(
+            id=item["fact_id"],
+            category=item["category"],
+            title=item.get("title", ""),
+            organization=item.get("organization", ""),
+            start=item.get("start", ""),
+            end=item.get("end", ""),
+            details="\n".join(item.get("details", [])),
+        )
+        for item in json.loads(_tag(user_prompt, "core_facts") or "[]")
+    ]
+    headline = re.search(r"Candidate headline \(may be empty\):[ \t]*(.*)", user_prompt)
+    draft = template_draft(facts, _tag(user_prompt, "target_role"), headline.group(1).strip() if headline else "")
+    return draft.model_dump()
 
 
 # --- The client ------------------------------------------------------------------------------------
@@ -312,6 +317,8 @@ class FakeLLMClient:
                 reply: dict | str = screen_offline(user)
             elif schema is RubricDraft:
                 reply = draft_rubric_offline(user)
+            elif schema is ResumeDraft:
+                reply = draft_resume_offline(user)
             else:
                 raise LLMError(f"The fake client has no offline behavior for {schema.__name__}")
             if self._tamper is not None:

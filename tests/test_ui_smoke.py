@@ -81,7 +81,7 @@ def test_demo_loader_and_fairness_checks_from_the_ui(database):
     next(b for b in at.button if b.label == "Load demo data").click().run()
     assert not at.exception, at.exception
     with new_session(database) as session:
-        assert seed_counts(session) == (2, 20)
+        assert seed_counts(session) == (2, 26)
 
     at.switch_page("pages/3_Screen.py").run()
     at.button(key="run_screening").click().run()
@@ -202,3 +202,155 @@ def test_roles_page_imports_a_posting_from_a_link(database, monkeypatch):
     assert any("structured data" in s.value for s in at.success)
     with new_session(database) as session:
         assert len(list_events(session, event_types=["posting_imported"])) == 1
+
+
+# --- Employer upgrades: category weights and the model list (T18, T11) ---------------------------------
+
+
+def test_roles_page_sets_category_weights_and_results_show_the_breakdown(seeded):
+    from talentsift.models import Role
+    from talentsift.roles import approve_role
+
+    at = open_app()
+    at.switch_page("pages/1_Roles.py").run()
+    assert not at.exception, at.exception
+    weights = {n.label: n for n in at.number_input if n.label in ("Skills", "Education", "Certifications", "Experience")}
+    assert len(weights) == 4 and weights["Skills"].value == 25
+    weights["Skills"].set_value(70)
+    next(b for b in at.button if b.label == "Save changes").click().run()
+    assert not at.exception, at.exception
+    assert any("Saved as version 2" in s.value for s in at.success)
+
+    with new_session(seeded) as session:
+        role = session.exec(select(Role)).one()
+        assert role.version == 2 and role.category_weights["skills"] == 70
+        approve_role(session, role)
+
+    at.switch_page("pages/3_Screen.py").run()
+    assert any("Employer weights" in c.value for c in at.caption)
+    next(b for b in at.button if b.key == "run_screening").click().run()
+    assert not at.exception, at.exception
+    at.switch_page("pages/4_Results.py").run()
+    assert not at.exception, at.exception
+    assert any("Employer weights for this run" in c.value for c in at.caption)
+    assert any("Score breakdown (category score × employer weight)" in c.value for c in at.caption)
+    assert any(m.value == "**Score breakdown**" for m in at.markdown)
+
+
+def test_settings_page_offers_the_model_list_with_claude_as_default(database):
+    from talentsift.model_catalog import DEFAULT_MODEL, MODEL_CATALOG
+
+    at = open_app()
+    at.switch_page("pages/6_Settings.py").run()
+    assert not at.exception, at.exception
+    picker = next(s for s in at.selectbox if s.label == "AI model for scoring")
+    assert picker.value == DEFAULT_MODEL == "anthropic/claude-sonnet-4.5"
+    assert picker.options[: len(MODEL_CATALOG)] == [option.label for option in MODEL_CATALOG]
+
+    at.text_input[0].input("sk-or-v1-abc123def456")
+    picker.set_value(MODEL_CATALOG[1].slug)
+    next(b for b in at.button if b.label == "Save and use OpenRouter").click().run()
+    assert not at.exception, at.exception
+    assert os.environ["LLM_MODEL"] == MODEL_CATALOG[1].slug
+
+
+# --- Candidate side (T25) ------------------------------------------------------------------------------
+
+CANDIDATE_PAGES = ["pages/7_Candidate_Profile.py", "pages/8_Candidate_Draft.py", "pages/9_Candidate_Versions.py"]
+
+
+def labelled(elements, label):
+    return next(e for e in elements if e.label == label)
+
+
+def test_candidate_pages_render_with_their_own_banner_and_ask_for_a_profile(database):
+    from talentsift.ui import CANDIDATE_BANNER
+
+    at = open_app()
+    for page in CANDIDATE_PAGES:
+        at.switch_page(page).run()
+        assert not at.exception, (page, at.exception)
+        assert sum(CANDIDATE_BANNER in info.value for info in at.info) == 1, page
+        assert not any(BANNER in info.value for info in at.info), page
+    assert any("Open your profile first" in w.value for w in at.warning)  # draft and versions need a profile
+
+
+def test_candidate_cannot_start_without_consent(database):
+    from talentsift.models import CandidateProfile
+
+    at = open_app()
+    at.switch_page(CANDIDATE_PAGES[0]).run()
+    assert any("how TalentSift uses AI" in m.value for m in at.markdown)
+    labelled(at.text_input, "Your name, as it should appear on your resume").set_value("Avery Exampleton")
+    labelled(at.button, "Create my profile").click().run()
+    assert any("accept the notice" in e.value for e in at.error)
+    with new_session(database) as session:
+        assert session.exec(select(CandidateProfile)).all() == []
+
+
+def test_candidate_flow_profile_facts_draft_approve_save_compare(database):
+    from talentsift.models import CandidateProfile, CoreFact, ResumeVersion
+
+    at = open_app()
+    at.switch_page(CANDIDATE_PAGES[0]).run()
+    labelled(at.text_input, "Your name, as it should appear on your resume").set_value("Avery Exampleton")
+    at.checkbox[0].check()
+    labelled(at.button, "Create my profile").click().run()
+    assert not at.exception, at.exception
+    code = at.code[0].value
+    assert len(code) == 14 and any("Save this access code" in s.value for s in at.success)
+    labelled(at.button, "I have saved my code").click().run()
+    assert not at.code
+
+    labelled(at.text_input, "Skill or tool").set_value("SQL, Tableau")
+    labelled(at.button, "Add to skills").click().run()
+    labelled(at.text_input, "Job title").set_value("Data Analyst")
+    labelled(at.text_input, "Employer").set_value("Fictional Grocers")
+    labelled(at.text_area, "What you did (one accomplishment per line)").set_value("Built 12 Tableau dashboards\nWrote SQL queries")
+    labelled(at.button, "Add to experience").click().run()
+    assert not at.exception, at.exception
+    assert [t.label for t in at.tabs] == ["Skills (1)", "Education (0)", "Certifications (0)", "Experience (1)"]
+
+    def draft_and_save(role, posting, label):
+        at.switch_page(CANDIDATE_PAGES[1]).run()
+        labelled(at.text_input, "Role you are applying for").set_value(role)
+        labelled(at.text_area, "Job description").set_value(posting)
+        at.button[0].click().run()
+        assert not at.exception, at.exception
+        assert [m.value for m in at.metric][0] == "Passed"
+        body = next(m.value for m in at.markdown if m.value.startswith("# Avery Exampleton"))
+        assert "**Data Analyst** · Fictional Grocers" in body and "Snowflake" not in body
+        labelled(at.text_input, "Name this version").set_value(label)
+        labelled(at.button, "Approve and save").click().run()
+        assert any("Confirm that you have read" in e.value for e in at.error)  # approval is required
+        at.checkbox[0].check()
+        labelled(at.button, "Approve and save").click().run()
+        assert not at.exception, at.exception
+        assert any(f"Saved as '{label}'" in s.value for s in at.success)
+
+    draft_and_save("BI Analyst", "Requirements\n- SQL queries\n- Snowflake", "BI")
+    draft_and_save("Dashboard Developer", "Requirements\n- Tableau dashboards", "Dashboards")
+
+    at.switch_page(CANDIDATE_PAGES[2]).run()
+    assert not at.exception, at.exception
+    assert list(at.dataframe[0].value["Version"]) == ["BI", "Dashboards"]
+    assert any("line(s) only in A" in c.value for c in at.caption)  # the two versions order the bullets differently
+
+    # Closing the profile and returning with the code brings everything back.
+    at.switch_page(CANDIDATE_PAGES[0]).run()
+    labelled(at.button, "Close my profile on this device").click().run()
+    labelled(at.text_input, "Access code").set_value("WRONG-CODE-0000")
+    labelled(at.button, "Open my profile").click().run()
+    assert any("No profile matches" in e.value for e in at.error)
+    labelled(at.text_input, "Access code").set_value(code.lower())
+    labelled(at.button, "Open my profile").click().run()
+    assert not at.exception, at.exception
+    assert [t.label for t in at.tabs][0] == "Skills (1)"
+
+    # Delete everything.
+    at.checkbox(key="delete_sure").check().run()
+    labelled(at.button, "Delete my profile and all my data").click().run()
+    assert not at.exception, at.exception
+    with new_session(database) as session:
+        for table in (CandidateProfile, CoreFact, ResumeVersion):
+            assert session.exec(select(table)).all() == []

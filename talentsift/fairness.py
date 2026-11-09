@@ -95,6 +95,13 @@ def consistency_check(
     session: Session, run: ScreeningRun, client: LLMClient, settings: Settings, sample_size: int = 5
 ) -> ConsistencyReport:
     role, criteria = _check_role_unchanged(session, run)
+    # Compare like with like: use the penalty the run used, not whatever the setting is today.
+    settings = settings.with_overrides(must_have_penalty=run.must_have_penalty)
+    if client.model != run.model_requested:
+        raise FairnessCheckError(
+            f"This run used {run.model_requested}, but the selected AI is {client.model}. "
+            "Switch back to the run's model to check its consistency."
+        )
     evaluations = list(
         session.exec(select(Evaluation).where(Evaluation.run_id == run.id, Evaluation.fit_score != None))  # noqa: E711
     )

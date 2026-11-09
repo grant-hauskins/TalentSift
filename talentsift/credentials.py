@@ -66,7 +66,7 @@ def save_api_settings(api_key: str, model: str, *, env_path: Path | None = None,
     if any(ch.isspace() for ch in api_key):
         raise CredentialError("The API key cannot contain spaces or line breaks.")
     if not model:
-        raise CredentialError("Enter a model slug, for example 'openai/gpt-4o-mini'.")
+        raise CredentialError("Choose a model, or enter a model id such as 'anthropic/claude-sonnet-4.5'.")
     if not api_key and not os.environ.get(KEY_VAR, "").strip():
         raise CredentialError("Enter an API key.")
     if api_key:

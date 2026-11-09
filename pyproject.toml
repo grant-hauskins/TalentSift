@@ -1,7 +1,7 @@
 [project]
 name = "talentsift"
-version = "0.1.0"
-description = "Employer-side AI resume screening with an auditable, reversible shortlist (course MVP)."
+version = "0.2.0"
+description = "Fair, explainable resume screening for employers and a fact-anchored drafting assistant for candidates (course MVP)."
 requires-python = ">=3.11"
 
 [tool.pytest.ini_options]

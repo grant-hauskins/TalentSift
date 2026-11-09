@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sqlalchemy import event, text
+from sqlalchemy import event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session as OrmSession
 from sqlalchemy.pool import StaticPool
@@ -37,12 +37,14 @@ def _trigger_sql(table: str) -> list[str]:
 def create_db_engine(database_url: str) -> Engine:
     """Create an engine. SQLite gets thread-safe settings because Streamlit runs scripts in threads."""
     kwargs: dict = {}
+    file_backed = False
     if database_url.startswith("sqlite"):
         kwargs["connect_args"] = {"check_same_thread": False}
         if database_url in ("sqlite://", "sqlite:///:memory:"):
             # One shared in-memory database for every connection (used by tests).
             kwargs["poolclass"] = StaticPool
         else:
+            file_backed = True
             Path(database_url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
     engine = create_engine(database_url, **kwargs)
 
@@ -52,13 +54,60 @@ def create_db_engine(database_url: str) -> Engine:
         def _sqlite_pragmas(dbapi_connection, _record):  # pragma: no cover - trivial
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
+            # A few people use one install at once: wait for a lock instead of failing immediately.
+            cursor.execute("PRAGMA busy_timeout=5000")
+            if file_backed:
+                # Write-ahead logging lets readers keep reading while a screening run writes.
+                cursor.execute("PRAGMA journal_mode=WAL")
             cursor.close()
 
     return engine
 
 
+def _default_sql(column) -> str:
+    """SQL literal for a column's Python default, used when adding it to an existing table."""
+    default = column.default.arg if column.default is not None and not callable(column.default.arg) else None
+    if default is None:
+        return "NULL" if column.nullable else "''"
+    if isinstance(default, bool):
+        return "1" if default else "0"
+    if isinstance(default, (int, float)):
+        return str(default)
+    return "'" + str(default).replace("'", "''") + "'"
+
+
+def upgrade_schema(engine: Engine) -> list[str]:
+    """Add columns that the models define but an older database file lacks.
+
+    `create_all` only creates missing tables, so a v1 database would otherwise fail on the first query
+    that touches a new column. Existing rows get the model's default. Returns "table.column" for each
+    column added. Nothing is ever dropped or rewritten.
+    """
+    added: list[str] = []
+    with engine.begin() as connection:
+        existing_tables = set(inspect(connection).get_table_names())
+        for table in SQLModel.metadata.sorted_tables:
+            if table.name not in existing_tables:
+                continue  # create_all will build it complete
+            have = {column["name"] for column in inspect(connection).get_columns(table.name)}
+            for column in table.columns:
+                if column.name in have:
+                    continue
+                column_type = column.type.compile(dialect=engine.dialect)
+                null_sql = "" if column.nullable else " NOT NULL"
+                connection.execute(
+                    text(
+                        f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {column_type}'
+                        f"{null_sql} DEFAULT {_default_sql(column)}"
+                    )
+                )
+                added.append(f"{table.name}.{column.name}")
+    return added
+
+
 def init_db(engine: Engine) -> None:
-    """Create tables (if missing) and install the append-only triggers."""
+    """Create tables (if missing), upgrade an older schema, and install the append-only triggers."""
+    upgrade_schema(engine)
     SQLModel.metadata.create_all(engine)
     if engine.dialect.name == "sqlite":
         with engine.begin() as connection:

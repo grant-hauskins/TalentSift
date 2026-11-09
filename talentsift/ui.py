@@ -17,6 +17,8 @@ from talentsift.config import Settings, get_settings
 from talentsift.db import create_db_engine, init_db, new_session
 from talentsift.llm import LLMClient, LLMError, build_client, describe_provider
 from talentsift.models import (
+    CATEGORIES,
+    CATEGORY_LABELS,
     STATUS_AUTO_REJECTED,
     STATUS_NEEDS_REVIEW,
     STATUS_NOT_SHORTLISTED,
@@ -82,6 +84,45 @@ def db_session() -> Iterator[Session]:
 def banner() -> None:
     """The persistent disclaimer shown at the top of every page."""
     st.info(BANNER, icon="⚖️")
+
+
+CANDIDATE_BANNER = "Drafts use only the facts you enter. Software checks every line, and nothing is saved until you approve it."
+CANDIDATE_KEY = "candidate_profile_id"
+
+
+def candidate_page_setup(title: str, caption: str | None = None, *, icon: str = "👤") -> Settings:
+    """First call on every candidate page. Same layout as `page_setup`, with the candidate's own banner."""
+    st.set_page_config(page_title=f"{title} · TalentSift", page_icon=icon, layout="wide")
+    current = settings()
+    st.info(CANDIDATE_BANNER, icon="🛡️")
+    st.title(title)
+    if caption:
+        st.caption(caption)
+    sidebar_status(current)
+    return current
+
+
+def current_candidate(session: Session):
+    """The profile opened in this browser session, or None. Candidate pages never look up any other profile."""
+    from talentsift.candidates import get_profile
+
+    profile = get_profile(session, st.session_state.get(CANDIDATE_KEY))
+    if profile is None:
+        st.session_state.pop(CANDIDATE_KEY, None)
+    else:
+        with st.sidebar:
+            st.caption(f"Candidate profile: **{profile.full_name}**")
+    return profile
+
+
+def require_candidate(session: Session):
+    """Return the open profile, or point the visitor to the profile page and stop."""
+    profile = current_candidate(session)
+    if profile is None:
+        st.warning("Open your profile first: start one, or return with your access code.")
+        st.page_link("pages/7_Candidate_Profile.py", label="Go to Candidate Profile", icon="👤")
+        st.stop()
+    return profile
 
 
 def page_setup(title: str, caption: str | None = None, *, icon: str = "🧭") -> Settings:
@@ -177,3 +218,35 @@ def fmt_time(value: datetime | None) -> str:
 
 def fmt_score(value: float | None) -> str:
     return "—" if value is None else f"{value:.1f}"
+
+
+def weights_caption(weights: dict[str, int], used: set[str] | None = None) -> str:
+    """ "Skills 40% · Experience 30% ..." for the categories a rubric uses (all four when `used` is None)."""
+    active = [c for c in CATEGORIES if used is None or c in used]
+    total = sum(weights.get(c, 0) for c in active)
+    if total <= 0:
+        return "equal weights"
+    return " · ".join(f"{CATEGORY_LABELS[c]} {100 * weights.get(c, 0) / total:.0f}%" for c in active)
+
+
+def breakdown_rows(breakdown: list[dict]) -> list[dict]:
+    """Table rows for a stored category breakdown (see scoring.CategoryResult.as_dict)."""
+    return [
+        {
+            "Category": CATEGORY_LABELS.get(item["category"], item["category"]),
+            "Criteria": item["criteria_count"],
+            "Category score": "—" if item["score"] is None else f"{item['score']:.1f}",
+            "Employer weight": "—" if item["score"] is None else f"{item['share_pct']:.0f}%",
+            "Points": "—" if item["score"] is None else f"{item['points']:.1f}",
+        }
+        for item in breakdown
+    ]
+
+
+def breakdown_caption(breakdown: list[dict]) -> str:
+    """One line: "Skills 82 × 40% · Experience 75 × 30% ..." for the categories that were scored."""
+    return " · ".join(
+        f"{CATEGORY_LABELS.get(item['category'], item['category'])} {item['score']:.0f} × {item['share_pct']:.0f}%"
+        for item in breakdown
+        if item["score"] is not None
+    )

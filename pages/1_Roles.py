@@ -9,7 +9,7 @@ from talentsift import ui
 from talentsift.audit import event_payload, list_events, log_event, sha256_text
 from talentsift.config import PROJECT_ROOT
 from talentsift.job_import import JobImportError, import_posting
-from talentsift.models import CRITERION_TYPES, CRITERION_WEIGHTS
+from talentsift.models import CATEGORIES, CATEGORY_LABELS, CRITERION_TYPES, CRITERION_WEIGHTS
 from talentsift.roles import (
     CriterionInput,
     RoleError,
@@ -161,13 +161,32 @@ with ui.db_session() as session:
         )
         top_n = right.number_input("Shortlist size (top N)", min_value=1, max_value=200, value=role.top_n)
 
-        st.markdown("**Criteria** · add, edit, or delete rows. Weights: high = 3, medium = 2, low = 1.")
+        st.markdown(
+            "**Category weights** · how much each kind of evidence counts toward the fit score. "
+            "Only the relative sizes matter; categories with no criteria are ignored."
+        )
+        weight_cols = st.columns(len(CATEGORIES))
+        current_weights = role.category_weights
+        category_weights = {
+            category: col.number_input(
+                CATEGORY_LABELS[category], min_value=0, max_value=100, value=current_weights[category], step=5,
+                key=f"cw_{role.id}_{role.version}_{category}",
+            )
+            for col, category in zip(weight_cols, CATEGORIES)
+        }
+        st.caption("Current split: " + ui.weights_caption(current_weights, {c.category for c in criteria}))
+
+        st.markdown(
+            "**Criteria** · add, edit, or delete rows. Give each a category. "
+            "Within a category, weights are high = 3, medium = 2, low = 1."
+        )
         table = pd.DataFrame(
             [
                 {
                     "id": c.id,
                     "name": c.name,
                     "description": c.description,
+                    "category": c.category,
                     "type": c.type,
                     "weight": c.weight,
                     "source": "AI draft" if c.source == "ai_draft" else "Manager",
@@ -175,7 +194,7 @@ with ui.db_session() as session:
                 }
                 for c in criteria
             ],
-            columns=["id", "name", "description", "type", "weight", "source", "flag"],
+            columns=["id", "name", "description", "category", "type", "weight", "source", "flag"],
         )
         edited = st.data_editor(
             table,
@@ -188,6 +207,7 @@ with ui.db_session() as session:
                 "id": None,  # hidden: links edited rows back to stored criteria
                 "name": st.column_config.TextColumn("Criterion", required=True, width="large"),
                 "description": st.column_config.TextColumn("What evidence counts", width="large"),
+                "category": st.column_config.SelectboxColumn("Category", options=list(CATEGORIES), required=True, default="skills"),
                 "type": st.column_config.SelectboxColumn("Type", options=list(CRITERION_TYPES), required=True, default="nice_to_have"),
                 "weight": st.column_config.SelectboxColumn("Weight", options=list(CRITERION_WEIGHTS), required=True, default="medium"),
                 "source": st.column_config.TextColumn("Source"),
@@ -208,6 +228,7 @@ with ui.db_session() as session:
                     description=str(row.get("description") or "").strip(),
                     type=row.get("type") or "nice_to_have",
                     weight=row.get("weight") or "medium",
+                    category=row.get("category") or "skills",
                     source=stored.source if stored else "manager",
                     proxy_warning=stored.proxy_warning if stored else "",
                     id=stored.id if stored else None,
@@ -217,6 +238,7 @@ with ui.db_session() as session:
             outcome = save_role(
                 session, role, title=title, summary=summary, posting_text=posting, criteria=rows,
                 auto_reject_threshold=int(threshold), top_n=int(top_n),
+                category_weights={category: int(value) for category, value in category_weights.items()},
             )
             st.session_state.flash = outcome.message
             st.rerun()
@@ -224,9 +246,10 @@ with ui.db_session() as session:
             st.error(str(exc))
 
     st.caption(
-        f"Fit score = weighted average of 0-4 criterion scores scaled to 0-100, minus {settings.must_have_penalty:g} "
-        "points for each must-have scored 0-1. Changing the title, summary, or criteria of an approved rubric creates "
-        "a new draft version; changing the threshold or top N does not."
+        "Fit score = each category's 0-100 score (weighted average of its 0-4 criterion scores) times that category's "
+        f"share of the weights, added up, minus {settings.must_have_penalty:g} points for each must-have scored 0-1. "
+        "Changing the title, summary, criteria, or category weights of an approved rubric creates a new draft version; "
+        "changing the threshold or top N does not."
     )
 
     actions = st.columns(4)

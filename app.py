@@ -12,8 +12,9 @@ from talentsift.models import Applicant, AuditEvent, Role, ScreeningRun
 
 settings = ui.page_setup("TalentSift", icon="🧭")
 st.markdown(
-    "Employer-side resume screening. Define a role, ingest a folder of resumes, and get a ranked, "
-    "explained, fully auditable shortlist. Every automated decision is logged and reversible."
+    "**For employers:** define a role, weight what matters, ingest resumes, and get a ranked, explained, fully "
+    "auditable shortlist. **For candidates:** enter your core facts once, draft a resume for a role with an AI "
+    "assistant that adds nothing beyond those facts, and compare your saved versions."
 )
 
 with ui.db_session() as session:
@@ -29,16 +30,28 @@ with ui.db_session() as session:
     cols[2].metric("Screening runs", runs)
     cols[3].metric("Audit events", events)
 
-    st.subheader("Workflow")
+    st.subheader("For employers")
     steps = [
-        ("pages/1_Roles.py", "1. Roles", "📋", "Paste a job posting or load it from a link. The AI drafts a rubric; you edit and approve it."),
+        ("pages/1_Roles.py", "1. Roles", "📋", "Paste a job posting or load it from a link. The AI drafts a rubric; you set category weights, edit, and approve."),
         ("pages/2_Applicants.py", "2. Applicants", "📄", "Pick a folder of PDF resumes (or upload them). Personal details are masked."),
         ("pages/3_Screen.py", "3. Screen", "⚙️", "Score a batch against an approved rubric, with a live token and cost tally."),
-        ("pages/4_Results.py", "4. Results", "🏆", "Shortlist with evidence, reasons for everyone else, overrides and reinstatement."),
+        ("pages/4_Results.py", "4. Results", "🏆", "Ranked shortlist with a score breakdown and evidence, reasons for everyone else, overrides."),
         ("pages/5_Audit.py", "5. Audit", "🔍", "Every step, raw prompts and replies, CSV export, and fairness checks."),
-        ("pages/6_Settings.py", "Settings", "🔑", "Add your OpenRouter API key and model to screen with a real AI model."),
+        ("pages/6_Settings.py", "Settings", "🔑", "Add your OpenRouter API key and choose the AI model used for scoring."),
     ]
     for page, label, icon, text in steps:
+        left, right = st.columns([1, 4])
+        left.page_link(page, label=label, icon=icon)
+        right.write(text)
+
+    st.subheader("For candidates")
+    st.caption("Candidate profiles are separate from employer data: employers cannot see them, and candidates cannot see roles, applicants, or results.")
+    candidate_steps = [
+        ("pages/7_Candidate_Profile.py", "Candidate Profile", "👤", "Read the AI notice, then enter your core facts: skills, education, certifications, experience."),
+        ("pages/8_Candidate_Draft.py", "Candidate Draft", "✍️", "Paste a job description. The assistant drafts from your facts only, and a guard checks every line."),
+        ("pages/9_Candidate_Versions.py", "Candidate Versions", "🗂️", "Save approved drafts as named versions and compare them side by side."),
+    ]
+    for page, label, icon, text in candidate_steps:
         left, right = st.columns([1, 4])
         left.page_link(page, label=label, icon=icon)
         right.write(text)
@@ -59,7 +72,9 @@ with st.expander("How TalentSift decides"):
         f"""
 - **The AI scores, code decides.** For each criterion the model returns a 0-4 score, a rationale, and verbatim
   quotes from the masked resume. Quotes are checked against the resume text.
-- **Fit score (0-100)** = weighted average of criterion scores (high = 3, medium = 2, low = 1), minus
+- **Fit score (0-100)**: every criterion belongs to a category (skills, education, certifications, or
+  experience). Each category's score is the weighted average of its criteria (high = 3, medium = 2, low = 1).
+  The category scores are combined using the weights you set on the role, minus
   **{settings.must_have_penalty:g} points** for each must-have scored 0-1 (never below 0).
 - **Ranking**: fit score, then must-haves met, then applicant id. Never by name.
 - **Statuses**: the top N at or above the role's threshold are *shortlisted* (ties included); below the

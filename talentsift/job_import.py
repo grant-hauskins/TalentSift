@@ -87,7 +87,14 @@ def normalize_url(url: str) -> str:
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise JobImportError("Use a web link that starts with http:// or https://.")
+    try:
+        parsed.port  # raises ValueError for a port that is not a number
+    except ValueError:
+        raise JobImportError("That link has an invalid port. Check the link.") from None
     return url
+
+
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")  # IPv6 addresses that map onto IPv4, including private ones
 
 
 def _default_resolver(host: str) -> list[str]:
@@ -99,11 +106,11 @@ def check_public_host(url: str, resolve: Callable[[str], list[str]] = _default_r
     host = urlparse(url).hostname or ""
     try:
         addresses = resolve(host)
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:  # UnicodeError: a label that is empty or too long
         raise JobImportError(f"Could not find the website '{host}'. Check the link.") from exc
     for address in addresses:
         ip = ipaddress.ip_address(address.split("%")[0])
-        if not ip.is_global:
+        if not ip.is_global or ip in _NAT64:
             raise JobImportError(f"'{host}' is a private or local address. Only public web pages can be imported.")
 
 
@@ -148,7 +155,7 @@ def fetch_html(
         raise JobImportError("The link redirected too many times.")
     except httpx.TimeoutException as exc:
         raise JobImportError("The page took too long to respond. Try again or paste the posting.") from exc
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, httpx.InvalidURL) as exc:
         raise JobImportError(f"Could not load the page: {exc.__class__.__name__}.") from exc
     finally:
         if own_client:
@@ -281,6 +288,8 @@ def _location(value: Any, location_type: Any) -> str:
         address = place.get("address") or {}
         if isinstance(address, str):
             parts.append(address)
+            continue
+        if not isinstance(address, dict):
             continue
         city = ", ".join(x for x in (address.get("addressLocality"), address.get("addressRegion")) if isinstance(x, str) and x)
         country = address.get("addressCountry")

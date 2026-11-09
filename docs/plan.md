@@ -104,3 +104,60 @@ tests/                          # pytest suite, run in CI on every pull request
 | Runaway cost on 200 applicants | Per-batch cost cap stops the run cleanly; cache makes re-runs free |
 | Demo-day network failure | Fake offline client produces deterministic, explainable results |
 | Hosted demo loses SQLite file on reboot | `AUTO_SEED_DEMO` and a "Load demo data" button rebuild the demo in seconds |
+
+## MVP build sprint (November 2026)
+
+The v1 prototype above became the MVP in three short sprints (Nov 4 to Nov 17, present Nov 18). The backlog is
+the 27 Mission Control tasks; each has a GitHub issue. Seven baseline tasks are deferred past Nov 18: 1.2, 4.3
+DOCX parser, 4.5 reliability pass, 5.2 per-run model picker, 6.4 A/B scoring, 6.5 improvement suggestions, 6.7
+offline client extensions.
+
+| Task | WBS | Work package | Owner | Sprint | Issue | Main files or document |
+|------|-----|--------------|-------|--------|-------|------------------------|
+| T01 | 1.1 | Kickoff, sprint charter, role assignment | Grant | 1 | #3 | `docs/decisions.md` |
+| T03 | 2.1 | Prototype audit and defect backlog | Damian | 1 | #4 | `docs/prototype_audit.md` |
+| T04 | 2.2 | Candidate-side requirements | Arizbeth | 1 | #5 | `docs/requirements.md` FR-34 to FR-41 |
+| T05 | 2.3 | Weighting and model-selection requirements | Grant | 1 | #6 | `docs/requirements.md` FR-29 to FR-33 |
+| T06 | 2.4 | Deployment memo | Damian | 1 | #7 | `docs/deployment_memo.md` |
+| T07 | 2.5 | Requirements sign-off (M1) | Grant | 1 | #8 | decision log |
+| T08 | 3.1 | Data model changes | Damian | 1 | #9 | `models.py`, `db.py::upgrade_schema` |
+| T09 | 3.2 | Candidate UX wireframes | Arizbeth | 1 | #10 | `docs/candidate_wireframes.md` |
+| T10 | 3.3 | Prompt design and no-new-facts guard spec | Grant | 1 | #11 | `docs/drafting_guard.md`, `prompts/resume_draft_v1.md` |
+| T11 | 3.4 | Employer upgrade design | Arizbeth | 2 | #12 | `docs/employer_upgrade_design.md`, `model_catalog.py` |
+| T12 | 3.5 | Design approval (M2) | Grant | 2 | #13 | decision log |
+| T13 | 4.1 | Defect fixes from the audit | Damian | 2 | #14 | `masking.py`, `ingest.py`, `job_import.py`, `fairness.py` |
+| T14 | 4.2 | Persistence and backup | Damian | 2 | #15 | `backup.py`, `scripts/backup.py`, `config.py` |
+| T16 | 4.4 | Masking hardening | Damian | 2 | #16 | `masking.py`, `scoring.py::_name_exposed` |
+| T18 | 5.1 | Category weights | Grant | 2 | #17 | `scoring.py`, `roles.py`, `pages/1_Roles.py`, `pages/4_Results.py` |
+| T20 | 6.1 | Core-facts profile | Damian | 2 | #18 | `candidates.py` |
+| T21 | 6.2 | Drafting assistant with guard | Grant | 2 | #19 | `guard.py`, `drafting.py`, `draft_template.py` |
+| T22 | 6.3 | Version save and compare | Damian | 2 | #20 | `drafting.py` |
+| T25 | 6.6 | Candidate pages | Arizbeth | 3 | #21 | `pages/7_`, `8_`, `9_Candidate_*.py` |
+| T27 | 7.1 | Unit tests for new modules | Arizbeth | 3 | #22 | `tests/` |
+| T28 | 7.2 | Integration and end-to-end run | Damian | 3 | #23 | `tests/test_end_to_end.py` |
+| T29 | 7.3 | Fairness and guardrail validation | Damian | 3 | #24 | `docs/validation_report.md` |
+| T30 | 7.4 | UAT with pilot users | Arizbeth | 3 | #25 | `docs/uat_script.md` |
+| T31 | 7.5 | Defect fix cycle (M5) | Grant | 3 | #26 | issues |
+| T32 | 8.1 | Documentation update | Grant | 3 | #27 | `README.md`, `docs/install.md` |
+| T33 | 8.2 | MVP deployment | Damian | 3 | #28 | `docs/install.md`, `deploy/` |
+| T34 | 8.3 | Presentation and demo package (M6) | Grant | 3 | #29 | `docs/demo_script.md` |
+
+New modules since v1:
+
+```
+talentsift/model_catalog.py     # the short list of models an employer can choose
+talentsift/backup.py            # database + uploads archive, rotate, verify, restore
+talentsift/candidates.py        # candidate profile, consent, access code, core facts
+talentsift/draft_template.py    # fact-only draft builder: the fallback and the offline "model"
+talentsift/guard.py             # the no-new-facts guard (deterministic, no AI)
+talentsift/drafting.py          # prompt, guarded retry, fallback, rendering, saved versions, compare
+talentsift/textutil.py          # shared keyword and stemming helpers
+pages/7_Candidate_Profile.py    # notice and consent, core facts, delete my data
+pages/8_Candidate_Draft.py      # draft for a pasted job description, check result, approve and save
+pages/9_Candidate_Versions.py   # saved versions and side-by-side compare
+prompts/rubric_draft_v2.md      # adds a category per criterion
+prompts/resume_draft_v1.md      # fact-anchored drafting
+scripts/backup.py               # backup CLI for cron
+deploy/talentsift.service       # systemd unit for a self-hosted install
+```
+

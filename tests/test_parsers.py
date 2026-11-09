@@ -23,7 +23,7 @@ def test_pdf_parser_extracts_text(tmp_path):
 
 def test_committed_sample_resumes_parse():
     statuses = {path.name: parse_file(path)[0].status for path in sorted(SAMPLES.glob("*.pdf"))}
-    assert len(statuses) == 20
+    assert len(statuses) == 26
     assert statuses.pop("19_parker_partialton.pdf") == PARSE_PARTIAL
     assert statuses.pop("20_logan_scannerly.pdf") == PARSE_NEEDS_OCR
     assert set(statuses.values()) == {PARSE_PARSED}

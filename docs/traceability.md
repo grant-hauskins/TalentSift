@@ -35,6 +35,23 @@ Requirement text lives in [requirements.md](requirements.md). Test paths are rel
 | FR-26 Banner on every page | `ui.py::page_setup`, every page | `test_ui_smoke.py::test_empty_app_renders_every_page_with_banner_and_provider_picker` |
 | FR-27 Sample data and seeding | `scripts/make_sample_resumes.py`, `demo.py`, `scripts/seed_demo.py` | `test_end_to_end.py` (all), `test_parsers.py::test_committed_sample_resumes_parse` |
 
+| FR-29 Criterion categories | `models.py::CATEGORIES`, `roles.py`, `prompts/rubric_draft_v2.md`, `llm/fake_client.py::infer_category` | `test_category_weights.py::test_changing_weights_on_an_approved_rubric_creates_a_new_version_and_discard_restores_them`, `::test_duplicate_keeps_categories_and_weights` |
+| FR-30 Employer category weights, versioned | `roles.py::clean_category_weights`, `roles.py::save_role`, `pages/1_Roles.py` | `test_category_weights.py::test_role_stores_weights_and_rejects_bad_ones`, `test_ui_smoke.py::test_roles_page_sets_category_weights_and_results_show_the_breakdown` |
+| FR-31 Category-weighted fit score | `scoring.py::compute_fit_score` | `test_category_weights.py::test_fit_score_combines_category_scores_by_the_employers_weights`, `::test_weights_change_the_score_and_only_relative_size_matters`, `::test_one_category_gives_the_original_weighted_average`, `::test_must_have_penalty_applies_after_the_category_weights` |
+| FR-32 Score breakdown for every candidate | `scoring.py::CategoryResult`, `pages/4_Results.py::breakdown_block` | `test_category_weights.py::test_every_scored_applicant_gets_a_breakdown_traceable_to_the_runs_weights`, `test_end_to_end.py::test_sow_success_criterion_25_resumes_ranked_with_a_breakdown_for_every_candidate` |
+| FR-33 Choice of AI model | `model_catalog.py`, `pages/6_Settings.py` | `test_ui_smoke.py::test_settings_page_offers_the_model_list_with_claude_as_default` |
+| FR-34 Consent and access code | `candidates.py::create_profile`, `pages/7_Candidate_Profile.py` | `test_candidates.py::test_a_profile_needs_consent_and_a_name`, `::test_consent_is_recorded_and_the_code_opens_the_profile`, `test_ui_smoke.py::test_candidate_cannot_start_without_consent` |
+| FR-35 Core facts | `candidates.py`, `pages/7_Candidate_Profile.py` | `test_candidates.py::test_facts_are_stored_by_category_edited_and_removed`, `::test_location_must_not_be_a_street_address_or_zip` |
+| FR-36 Fact-anchored drafting | `drafting.py`, `prompts/resume_draft_v1.md`, `schemas.py::ResumeDraft` | `test_drafting.py::test_draft_uses_only_the_facts_and_code_renders_titles_employers_and_dates`, `::test_the_model_never_receives_the_candidates_name_or_contact_details` |
+| FR-37 No-new-facts guard | `guard.py` | `test_guard.py` (all) |
+| FR-38 Retry, then fallback | `drafting.py::generate_draft`, `draft_template.py` | `test_drafting.py::test_an_invented_draft_is_retried_then_replaced_by_the_candidates_own_wording`, `::test_a_clean_retry_is_accepted`, `::test_ai_outage_falls_back_to_the_fact_template`, `test_guard.py::test_the_fact_template_always_passes` |
+| FR-39 Approval before save | `drafting.py::save_version`, `pages/8_Candidate_Draft.py` | `test_drafting.py::test_saving_needs_approval_a_unique_name_and_a_draft_that_still_matches_the_facts` |
+| FR-40 Versions and compare | `drafting.py::compare_versions`, `pages/9_Candidate_Versions.py` | `test_drafting.py::test_versions_are_listed_compared_and_deleted`, `test_ui_smoke.py::test_candidate_flow_profile_facts_draft_approve_save_compare` |
+| FR-41 Delete my data; separation; no content in audit | `candidates.py::delete_profile`, `drafting.py` | `test_candidates.py::test_delete_removes_everything_and_the_audit_log_never_held_personal_data`, `test_drafting.py::test_audit_log_records_the_check_but_none_of_the_candidates_content`, `test_end_to_end.py::test_candidate_flow_end_to_end_stays_separate_from_employer_data` |
+| FR-42 Unmasked name never reaches the model | `masking.py::name_was_masked`, `scoring.py::_name_exposed` | `test_defect_fixes.py::test_resume_without_a_masked_name_is_not_sent_to_the_model`, `test_masking_hardening.py` (all) |
+| FR-43 Backup and restore | `backup.py`, `scripts/backup.py`, `config.py` | `test_backup.py` (all) |
+| FR-44 Schema upgrade in place | `db.py::upgrade_schema` | `test_schema_upgrade.py` (all) |
+
 ## Non-functional requirements
 
 | Req | Module(s) | Test(s) |
@@ -51,6 +68,9 @@ Requirement text lives in [requirements.md](requirements.md). Test paths are rel
 | NFR-10 Secrets | `config.py` (key excluded from `repr`) | `test_db.py::test_settings_from_env_parses_values`, `test_openrouter_client.py::test_result_reports_model_provider_tokens_and_cost` |
 | NFR-11 Explainability | `scoring.py::build_reasons` | `test_status.py::test_reasons_are_specific_and_job_related` |
 | NFR-12 Resilience | `llm/openrouter_client.py`, `scoring.py::_Budget` | `test_openrouter_client.py::test_retries_once_on_network_failure`, `::test_bad_key_is_fatal`, `test_screening_run.py::test_fatal_provider_error_stops_calls_and_fails_the_run` |
+| NFR-13 Truthful drafts | `guard.py`, `schemas.py::ResumeDraft`, `draft_template.py` | `test_guard.py::test_anything_beyond_the_facts_is_blocked`, `test_drafting.py::test_an_invented_draft_is_retried_then_replaced_by_the_candidates_own_wording` |
+| NFR-14 Separation of sides | `models.py` (candidate tables), `candidates.py`, `ui.py::current_candidate` | `test_end_to_end.py::test_candidate_flow_end_to_end_stays_separate_from_employer_data` |
+| NFR-15 Speed: 25 resumes in under five minutes | `scoring.py` (parallel calls, cache) | `test_end_to_end.py::test_sow_success_criterion_25_resumes_ranked_with_a_breakdown_for_every_candidate` |
 
 ## Definition of done
 
