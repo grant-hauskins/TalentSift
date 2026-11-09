@@ -28,6 +28,7 @@ from talentsift.parsers import parse_file
 
 ADDED = "added"
 DUPLICATE = "duplicate"
+REJECTED = "rejected"  # not a readable PDF: nothing is stored and no applicant is created
 
 
 @dataclass
@@ -35,7 +36,7 @@ class IngestResult:
     """Outcome for one file, ready to show in the UI."""
 
     filename: str
-    outcome: str  # "added" or "duplicate"
+    outcome: str  # "added", "duplicate", or "rejected"
     parse_status: str
     message: str
     applicant: Applicant | None = None
@@ -161,7 +162,16 @@ def ingest_upload(
     batch: str,
     settings: Settings,
 ) -> IngestResult:
-    """Save uploaded bytes under `settings.upload_dir` (named by hash) and ingest that copy."""
+    """Save uploaded bytes under `settings.upload_dir` (named by hash) and ingest that copy.
+
+    Empty files and files that are not PDFs are rejected here, exactly as the folder import skips them,
+    so a bad upload never becomes an applicant that shows up in every later screening run.
+    """
+    name = Path(filename).name
+    if not data:
+        return IngestResult(name, REJECTED, PARSE_ERROR, "Not imported: the file is empty.")
+    if Path(filename).suffix.lower() != PDF_EXTENSION or not data.lstrip()[:5].startswith(PDF_MAGIC):
+        return IngestResult(name, REJECTED, PARSE_UNSUPPORTED, "Not imported: the file is not a PDF.")
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256(data).hexdigest()
     stored = settings.upload_dir / f"{digest[:16]}{Path(filename).suffix.lower()}"

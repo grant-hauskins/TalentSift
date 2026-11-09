@@ -25,6 +25,7 @@ from sqlmodel import Session, select
 
 from talentsift.audit import log_event, log_llm_attempts, sha256_text
 from talentsift.config import Settings
+from talentsift.masking import name_was_masked
 from talentsift.llm.base import LLMClient, ValidatedCall, call_with_validation, extract_json_object, schema_name
 from talentsift.models import (
     CATEGORIES,
@@ -65,6 +66,7 @@ FLAG_EVIDENCE_UNVERIFIED = "evidence_unverified"
 FLAG_PARTIAL_PARSE = "partial_parse"
 FLAG_NOT_PARSED = "not_parsed"
 FLAG_TRUNCATED = "input_truncated"
+FLAG_NAME_NOT_MASKED = "name_not_masked"  # masking could not find the name: the model never sees this resume
 
 
 class ScreeningError(RuntimeError):
@@ -334,6 +336,15 @@ class _Budget:
                 self.stop_message = f"The AI provider rejected the request: {call.fatal_error}"
 
 
+def _name_exposed(applicant: Applicant, settings: Settings) -> bool:
+    """True when a readable resume has no masked name: its text may still contain the applicant's name."""
+    return (
+        settings.require_name_mask
+        and applicant.parse_status in SCREENABLE_PARSE_STATUSES
+        and not name_was_masked(applicant.masked_text)
+    )
+
+
 def criteria_prompt_json(criteria: Sequence[Criterion]) -> str:
     """The rubric as the model sees it. Weights stay out: they are applied in code, not by the model."""
     rows = [{"criterion_id": c.id, "name": c.name, "description": c.description, "type": c.type} for c in criteria]
@@ -462,7 +473,7 @@ def iter_scored(
     category_weights = role.category_weights
     jobs: list[_Job | None] = []
     for applicant in applicants:
-        if applicant.parse_status not in SCREENABLE_PARSE_STATUSES:
+        if applicant.parse_status not in SCREENABLE_PARSE_STATUSES or _name_exposed(applicant, settings):
             jobs.append(None)
             continue
         job = _build_job(applicant, role, criteria, prompt, settings, client.model, digest)
@@ -481,6 +492,13 @@ def iter_scored(
             label = {"display_label": applicant.display_label, **context}
             ids = dict(run_id=run_id, role_id=role.id, applicant_id=applicant.id)
 
+            if job is None and _name_exposed(applicant, settings):
+                scored.flags[FLAG_NAME_NOT_MASKED] = (
+                    "The applicant's name could not be found and masked, so this resume was not sent to the AI. "
+                    "Review it by hand."
+                )
+                yield scored
+                continue
             if job is None:
                 scored.flags[FLAG_NOT_PARSED] = (
                     applicant.parse_message or f"The resume could not be parsed ({applicant.parse_status})."

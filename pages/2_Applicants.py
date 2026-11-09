@@ -7,12 +7,15 @@ import streamlit as st
 from sqlmodel import select
 
 from talentsift import ui
+from talentsift.masking import name_was_masked
 from talentsift.config import PROJECT_ROOT
 from talentsift.ingest import (
     ADDED,
     already_ingested,
     default_batch_name,
     ingest_folder,
+    REJECTED,
+    file_sha256,
     ingest_upload,
     list_batches,
     remask_applicants,
@@ -33,13 +36,23 @@ settings = ui.page_setup(
 
 def show_results(results) -> None:
     added = [r for r in results if r.outcome == ADDED]
-    st.success(f"{len(added)} added, {len(results) - len(added)} skipped as duplicates.")
+    rejected = [r for r in results if r.outcome == REJECTED]
+    st.success(f"{len(added)} added, {len(results) - len(added) - len(rejected)} skipped as duplicates.")
+    if rejected:
+        st.warning(f"{len(rejected)} file(s) were not imported because they are empty or not PDFs.")
+    unmasked = [r for r in added if r.screenable and not name_was_masked(r.applicant.masked_text)]
+    if unmasked:
+        st.warning(
+            f"{len(unmasked)} resume(s) have no name TalentSift could find and mask: "
+            + ", ".join(r.applicant.display_label for r in unmasked)
+            + ". They will not be sent to the AI and will go to Needs review for a person to read."
+        )
     st.dataframe(
         pd.DataFrame(
             [
                 {
                     "file": r.filename,
-                    "result": "added" if r.outcome == ADDED else "duplicate (skipped)",
+                    "result": {ADDED: "added", REJECTED: "not imported"}.get(r.outcome, "duplicate (skipped)"),
                     "applicant": r.applicant.display_label if r.applicant else "",
                     "parse status": f"{ui.PARSE_ICONS.get(r.parse_status, '')} {r.parse_status}",
                     "note": r.message,
@@ -72,15 +85,39 @@ def subfolders(folder: Path) -> list[Path]:
         return []
 
 
+def safe_path(text: str) -> Path | None:
+    """A typed folder path as a Path, or None when it is empty or cannot be expanded ("~nosuchuser")."""
+    text = (text or "").strip().strip('"')
+    if not text:
+        return None
+    try:
+        return Path(text).expanduser()
+    except (RuntimeError, OSError, ValueError):
+        return None
+
+
+def inside_root(path: Path) -> bool:
+    """True when folder browsing is unrestricted, or `path` is inside the configured IMPORT_ROOT."""
+    root = settings.import_root
+    if root is None:
+        return True
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except (ValueError, OSError):
+        return False
+
+
 def folder_browser() -> Path | None:
     """Pick a folder on this computer: type or paste a path, or click through folders."""
     if BROWSE_KEY not in st.session_state:
         go_to(SAMPLES_DIR)
-    current = Path(st.session_state[BROWSE_KEY]).expanduser()
+    current = safe_path(st.session_state[BROWSE_KEY]) or SAMPLES_DIR
 
     def typed_path() -> None:
-        typed = Path(st.session_state["folder_path_box"].strip().strip('"')).expanduser()
-        st.session_state[BROWSE_KEY] = str(typed)
+        typed = safe_path(st.session_state["folder_path_box"])
+        if typed is not None:  # an empty or unusable path keeps the current folder
+            st.session_state[BROWSE_KEY] = str(typed)
 
     st.text_input(
         "Folder",
@@ -90,9 +127,12 @@ def folder_browser() -> Path | None:
     )
     nav = st.columns([1, 1, 1, 3])
     nav[0].button("⬆️ Up", on_click=go_to, args=(current.parent,), disabled=current.parent == current, width="stretch")
-    nav[1].button("🏠 Home", on_click=go_to, args=(Path.home(),), width="stretch")
+    nav[1].button("🏠 Home", on_click=go_to, args=(settings.import_root or Path.home(),), width="stretch")
     nav[2].button("🧪 Samples", on_click=go_to, args=(SAMPLES_DIR,), width="stretch")
 
+    if not inside_root(current) and current.resolve() != SAMPLES_DIR.resolve():
+        st.error(f"This install only imports from {settings.import_root} (set by IMPORT_ROOT). Choose a folder inside it.")
+        return None
     if not current.is_dir():
         st.error(f"Folder not found: {current}")
         return None
@@ -129,7 +169,17 @@ def folder_import(session) -> None:
 
     included, excluded = scan.included, scan.excluded
     duplicates = already_ingested(session, [f.path for f in included])
-    new = [f for f in included if f.path not in duplicates]
+    new, seen_hashes = [], set()
+    for f in included:
+        if f.path in duplicates:
+            continue
+        try:
+            digest = file_sha256(f.path)
+        except OSError:
+            digest = str(f.path)
+        if digest not in seen_hashes:  # two copies of the same file in one folder count once
+            seen_hashes.add(digest)
+            new.append(f)
 
     cols = st.columns(3)
     cols[0].metric("PDFs to send", len(new), help="New PDF resumes that will be parsed, masked, and screened.")
@@ -196,7 +246,10 @@ with ui.db_session() as session:
                 ]
             show_results(results)
     with folder_tab:
-        folder_import(session)
+        if settings.allow_folder_import:
+            folder_import(session)
+        else:
+            st.info("Folder import is turned off on this install (ALLOW_FOLDER_IMPORT=false). Upload files instead.")
 
     st.divider()
     batches = list_batches(session)

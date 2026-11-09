@@ -73,12 +73,20 @@ class Settings:
 
     # --- Privacy -----------------------------------------------------------------------------
     mask_grad_years: bool = False  # mask years in the education section when true
+    # A resume whose name could not be found and masked is never sent to the model; a person reviews it.
+    require_name_mask: bool = True
 
     # --- Storage and demo --------------------------------------------------------------------
     database_url: str = f"sqlite:///{DATA_DIR / 'talentsift.db'}"
     upload_dir: Path = DATA_DIR / "resumes" / "uploads"  # copies of uploaded files (gitignored)
     prompts_dir: Path = PROJECT_ROOT / "prompts"
     auto_seed_demo: bool = False  # load sample roles and resumes when the database is empty
+    # Folder import reads the disk of the machine running TalentSift. On a shared or hosted install,
+    # turn it off or limit it to one folder so visitors cannot browse the server.
+    allow_folder_import: bool = True
+    import_root: Path | None = None  # when set, folder import only works inside this folder
+    backup_dir: Path = DATA_DIR / "backups"
+    backup_keep: int = 14  # how many backups scripts/backup.py keeps
 
     def __post_init__(self) -> None:
         if self.llm_provider not in LLM_PROVIDERS:
@@ -91,6 +99,8 @@ class Settings:
             raise ValueError("LLM_CONCURRENCY must be at least 1")
         if self.must_have_penalty < 0:
             raise ValueError("MUST_HAVE_PENALTY cannot be negative")
+        if self.backup_keep < 1:
+            raise ValueError("BACKUP_KEEP must be at least 1")
 
     def with_overrides(self, **changes) -> "Settings":
         """Return a copy with some values changed (handy in tests and in the UI)."""
@@ -107,6 +117,9 @@ class Settings:
         # Default provider: OpenRouter when a key is present, otherwise the offline fake client.
         provider = env.get("LLM_PROVIDER", "").strip().lower() or ("openrouter" if api_key else "fake")
         defaults = cls()
+        # TALENTSIFT_DATA_DIR moves the database, uploaded resumes, and backups out of the code folder
+        # in one step (the hosted install keeps them on the VM's data disk).
+        data_dir = Path(env["TALENTSIFT_DATA_DIR"].strip()).expanduser() if env.get("TALENTSIFT_DATA_DIR", "").strip() else DATA_DIR
         return cls(
             llm_provider=provider,
             llm_model=env.get("LLM_MODEL", "").strip(),
@@ -120,8 +133,13 @@ class Settings:
             must_have_penalty=_as_float(env.get("MUST_HAVE_PENALTY"), defaults.must_have_penalty),
             max_resume_chars=_as_int(env.get("MAX_RESUME_CHARS"), defaults.max_resume_chars),
             mask_grad_years=_as_bool(env.get("MASK_GRAD_YEARS"), defaults.mask_grad_years),
-            database_url=_absolute_sqlite_url(env.get("DATABASE_URL", "").strip() or defaults.database_url),
-            upload_dir=Path(env.get("UPLOAD_DIR", "").strip() or defaults.upload_dir),
+            require_name_mask=_as_bool(env.get("REQUIRE_NAME_MASK"), defaults.require_name_mask),
+            allow_folder_import=_as_bool(env.get("ALLOW_FOLDER_IMPORT"), defaults.allow_folder_import),
+            import_root=Path(env["IMPORT_ROOT"].strip()).expanduser() if env.get("IMPORT_ROOT", "").strip() else None,
+            backup_dir=Path(env.get("BACKUP_DIR", "").strip() or data_dir / "backups"),
+            backup_keep=_as_int(env.get("BACKUP_KEEP"), defaults.backup_keep),
+            database_url=_absolute_sqlite_url(env.get("DATABASE_URL", "").strip() or f"sqlite:///{data_dir / 'talentsift.db'}"),
+            upload_dir=Path(env.get("UPLOAD_DIR", "").strip() or data_dir / "resumes" / "uploads"),
             prompts_dir=Path(env.get("PROMPTS_DIR", "").strip() or defaults.prompts_dir),
             auto_seed_demo=_as_bool(env.get("AUTO_SEED_DEMO"), defaults.auto_seed_demo),
         )
