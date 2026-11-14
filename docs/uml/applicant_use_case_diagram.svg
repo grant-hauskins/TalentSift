@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1530" width="1440" height="1530" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+<defs>
+<marker id="aInc" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="userSpaceOnUse"><path d="M1,1 L10,6 L1,11" fill="none" stroke="#2563eb" stroke-width="1.8"/></marker>
+<marker id="aExt" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="userSpaceOnUse"><path d="M1,1 L10,6 L1,11" fill="none" stroke="#c2570c" stroke-width="1.8"/></marker>
+</defs>
+<rect width="1440" height="1530" fill="#ffffff"/>
+<text x="720.0" y="34" text-anchor="middle" font-size="22" font-weight="700" fill="#1f2937">TalentSift – Applicant (Candidate) Use Cases</text>
+<rect x="232" y="62" width="996" height="1426" rx="14" fill="#ffffff" stroke="#374151" stroke-width="2.2"/>
+<text x="730.0" y="84" text-anchor="middle" font-size="15" font-weight="700" fill="#374151">TalentSift Candidate Portal</text>
+<rect x="300" y="100" width="896" height="590" rx="10" fill="#eef4ff" stroke="#93b4f0" stroke-width="1.5"/>
+<text x="316" y="122" font-size="13" font-weight="700" letter-spacing="1.4" fill="#4b5563">PROFILE &amp; CONSENT</text>
+<rect x="300" y="710" width="896" height="460" rx="10" fill="#effaf1" stroke="#86c99a" stroke-width="1.5"/>
+<text x="316" y="732" font-size="13" font-weight="700" letter-spacing="1.4" fill="#4b5563">DRAFTING A RESUME</text>
+<rect x="300" y="1190" width="896" height="280" rx="10" fill="#fff7e8" stroke="#e8c27a" stroke-width="1.5"/>
+<text x="316" y="1212" font-size="13" font-weight="700" letter-spacing="1.4" fill="#4b5563">SAVED VERSIONS</text>
+<line x1="272" y1="204" x2="272" y2="1442" stroke="#1f2937" stroke-width="2"/>
+<line x1="134" y1="786" x2="272" y2="786" stroke="#1f2937" stroke-width="2"/>
+<circle cx="272" cy="786" r="4.5" fill="#1f2937"/>
+<line x1="272" y1="204" x2="350" y2="204" stroke="#1f2937" stroke-width="1.6"/>
+<circle cx="272" cy="204" r="3.5" fill="#1f2937"/>
+<line x1="272" y1="300" x2="350" y2="300" stroke="#1f2937" stroke-width="1.6"/>
+<circle cx="272" cy="300" r="3.5" fill="#1f2937"/>
+<line x1="272" y1="360" x2="350" y2="360" stroke="#1f2937" stroke-width="1.6"/>
+<circle cx="272" cy="360" r="3.5" fill="#1f2937"/>
+<line x1="272" y1="482" x2="350" y2="482" stroke="#1f2937" stroke-width="1.6"/>
+<circle cx="272" cy="482" r="3.5" fill="#1f2937"/>
+<line x1="272" y1="566" x2="350" y2="566" stroke="#1f2937" stroke-width="1.6"/>
+<circle cx="272" cy="566" r="3.5" fill="#1f2937"/>
+<line x1="272" y1="630" x2="350" y2="630" stroke="#1f2937" stroke-width="1.6"/>
+<circle cx="272" cy="630" r="3.5" fill="#1f2937"/>
+<line x1="272" y1="906" x2="350" y2="906" stroke="#1f2937" stroke-width="1.6"/>
+<circle cx="272" cy="906" r="3.5" fill="#1f2937"/>
+<line x1="272" y1="990" x2="350" y2="990" stroke="#1f2937" stroke-width="1.6"/>
+<circle cx="272" cy="990" r="3.5" fill="#1f2937"/>
+<line x1="272" y1="1054" x2="350" y2="1054" stroke="#1f2937" stroke-width="1.6"/>
+<circle cx="272" cy="1054" r="3.5" fill="#1f2937"/>
+<line x1="272" y1="1118" x2="350" y2="1118" stroke="#1f2937" stroke-width="1.6"/>
+<circle cx="272" cy="1118" r="3.5" fill="#1f2937"/>
+<line x1="272" y1="1250" x2="350" y2="1250" stroke="#1f2937" stroke-width="1.6"/>
+<circle cx="272" cy="1250" r="3.5" fill="#1f2937"/>
+<line x1="272" y1="1314" x2="350" y2="1314" stroke="#1f2937" stroke-width="1.6"/>
+<circle cx="272" cy="1314" r="3.5" fill="#1f2937"/>
+<line x1="272" y1="1378" x2="350" y2="1378" stroke="#1f2937" stroke-width="1.6"/>
+<circle cx="272" cy="1378" r="3.5" fill="#1f2937"/>
+<line x1="272" y1="1442" x2="350" y2="1442" stroke="#1f2937" stroke-width="1.6"/>
+<circle cx="272" cy="1442" r="3.5" fill="#1f2937"/>
+<polyline points="470,880 470,752 1316,752" fill="none" stroke="#1f2937" stroke-width="1.6" stroke-linejoin="round"/>
+<line x1="590" y1="204" x2="805" y2="172" stroke="#2563eb" stroke-width="1.7" stroke-dasharray="7 5" marker-end="url(#aInc)"/>
+<rect x="690.3" y="175.16" width="66" height="17" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="723.3" y="188.16" text-anchor="middle" font-size="12" font-style="italic" font-weight="600" fill="#2563eb">«include»</text>
+<line x1="590" y1="204" x2="805" y2="236" stroke="#2563eb" stroke-width="1.7" stroke-dasharray="7 5" marker-end="url(#aInc)"/>
+<rect x="690.3" y="214.84" width="66" height="17" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="723.3" y="227.84" text-anchor="middle" font-size="12" font-style="italic" font-weight="600" fill="#2563eb">«include»</text>
+<line x1="590" y1="906" x2="805" y2="810" stroke="#2563eb" stroke-width="1.7" stroke-dasharray="7 5" marker-end="url(#aInc)"/>
+<rect x="690.3" y="837.48" width="66" height="17" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="723.3" y="850.48" text-anchor="middle" font-size="12" font-style="italic" font-weight="600" fill="#2563eb">«include»</text>
+<line x1="590" y1="906" x2="805" y2="874" stroke="#2563eb" stroke-width="1.7" stroke-dasharray="7 5" marker-end="url(#aInc)"/>
+<rect x="690.3" y="877.16" width="66" height="17" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="723.3" y="890.16" text-anchor="middle" font-size="12" font-style="italic" font-weight="600" fill="#2563eb">«include»</text>
+<line x1="590" y1="906" x2="805" y2="938" stroke="#2563eb" stroke-width="1.7" stroke-dasharray="7 5" marker-end="url(#aInc)"/>
+<rect x="690.3" y="916.84" width="66" height="17" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="723.3" y="929.84" text-anchor="middle" font-size="12" font-style="italic" font-weight="600" fill="#2563eb">«include»</text>
+<line x1="590" y1="1118" x2="805" y2="1118" stroke="#2563eb" stroke-width="1.7" stroke-dasharray="7 5" marker-end="url(#aInc)"/>
+<rect x="690.3" y="1109.0" width="66" height="17" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="723.3" y="1122.0" text-anchor="middle" font-size="12" font-style="italic" font-weight="600" fill="#2563eb">«include»</text>
+<line x1="805" y1="418" x2="590" y2="482" stroke="#c2570c" stroke-width="1.7" stroke-dasharray="7 5" marker-end="url(#aExt)"/>
+<rect x="690.3" y="433.32" width="66" height="17" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="723.3" y="446.32" text-anchor="middle" font-size="12" font-style="italic" font-weight="600" fill="#c2570c">«extend»</text>
+<line x1="805" y1="482" x2="590" y2="482" stroke="#c2570c" stroke-width="1.7" stroke-dasharray="7 5" marker-end="url(#aExt)"/>
+<rect x="690.3" y="473.0" width="66" height="17" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="723.3" y="486.0" text-anchor="middle" font-size="12" font-style="italic" font-weight="600" fill="#c2570c">«extend»</text>
+<line x1="805" y1="546" x2="590" y2="482" stroke="#c2570c" stroke-width="1.7" stroke-dasharray="7 5" marker-end="url(#aExt)"/>
+<rect x="690.3" y="512.68" width="66" height="17" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="723.3" y="525.68" text-anchor="middle" font-size="12" font-style="italic" font-weight="600" fill="#c2570c">«extend»</text>
+<line x1="805" y1="1002" x2="590" y2="906" stroke="#c2570c" stroke-width="1.7" stroke-dasharray="7 5" marker-end="url(#aExt)"/>
+<rect x="690.3" y="956.52" width="66" height="17" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="723.3" y="969.52" text-anchor="middle" font-size="12" font-style="italic" font-weight="600" fill="#c2570c">«extend»</text>
+<ellipse cx="470" cy="204" rx="120" ry="26" fill="#ffffff" stroke="#93b4f0" stroke-width="1.8"/>
+<text x="470" y="209" text-anchor="middle" font-size="14" fill="#1f2937">Create Profile</text>
+<ellipse cx="470" cy="300" rx="120" ry="26" fill="#ffffff" stroke="#93b4f0" stroke-width="1.8"/>
+<text x="470" y="305" text-anchor="middle" font-size="14" fill="#1f2937">Return with Access Code</text>
+<ellipse cx="470" cy="360" rx="120" ry="26" fill="#ffffff" stroke="#93b4f0" stroke-width="1.8"/>
+<text x="470" y="365" text-anchor="middle" font-size="14" fill="#1f2937">View Consent and Notice</text>
+<ellipse cx="470" cy="482" rx="120" ry="26" fill="#ffffff" stroke="#93b4f0" stroke-width="1.8"/>
+<text x="470" y="487" text-anchor="middle" font-size="14" fill="#1f2937">Manage Core Facts</text>
+<ellipse cx="470" cy="566" rx="120" ry="26" fill="#ffffff" stroke="#93b4f0" stroke-width="1.8"/>
+<text x="470" y="571" text-anchor="middle" font-size="14" fill="#1f2937">Close Profile on Device</text>
+<ellipse cx="470" cy="630" rx="120" ry="26" fill="#ffffff" stroke="#93b4f0" stroke-width="1.8"/>
+<text x="470" y="635" text-anchor="middle" font-size="14" fill="#1f2937">Delete Profile and All Data</text>
+<ellipse cx="470" cy="906" rx="120" ry="26" fill="#ffffff" stroke="#86c99a" stroke-width="1.8"/>
+<text x="470" y="911" text-anchor="middle" font-size="14" fill="#1f2937">Draft Resume for Role</text>
+<ellipse cx="470" cy="990" rx="120" ry="26" fill="#ffffff" stroke="#86c99a" stroke-width="1.8"/>
+<text x="470" y="995" text-anchor="middle" font-size="14" fill="#1f2937">Download Draft</text>
+<ellipse cx="470" cy="1054" rx="120" ry="26" fill="#ffffff" stroke="#86c99a" stroke-width="1.8"/>
+<text x="470" y="1059" text-anchor="middle" font-size="14" fill="#1f2937">Discard Draft</text>
+<ellipse cx="470" cy="1118" rx="120" ry="26" fill="#ffffff" stroke="#86c99a" stroke-width="1.8"/>
+<text x="470" y="1123" text-anchor="middle" font-size="14" fill="#1f2937">Approve and Save Version</text>
+<ellipse cx="470" cy="1250" rx="120" ry="26" fill="#ffffff" stroke="#e8c27a" stroke-width="1.8"/>
+<text x="470" y="1255" text-anchor="middle" font-size="14" fill="#1f2937">View Saved Versions</text>
+<ellipse cx="470" cy="1314" rx="120" ry="26" fill="#ffffff" stroke="#e8c27a" stroke-width="1.8"/>
+<text x="470" y="1319" text-anchor="middle" font-size="14" fill="#1f2937">Compare Two Versions</text>
+<ellipse cx="470" cy="1378" rx="120" ry="26" fill="#ffffff" stroke="#e8c27a" stroke-width="1.8"/>
+<text x="470" y="1383" text-anchor="middle" font-size="14" fill="#1f2937">Download Version</text>
+<ellipse cx="470" cy="1442" rx="120" ry="26" fill="#ffffff" stroke="#e8c27a" stroke-width="1.8"/>
+<text x="470" y="1447" text-anchor="middle" font-size="14" fill="#1f2937">Delete Version</text>
+<ellipse cx="940" cy="172" rx="135" ry="26" fill="#ffffff" stroke="#93b4f0" stroke-width="1.8"/>
+<text text-anchor="middle" font-size="14" fill="#1f2937"><tspan x="940" y="169">Read AI Notice and</tspan><tspan x="940" y="185">Give Consent</tspan></text>
+<ellipse cx="940" cy="236" rx="135" ry="26" fill="#ffffff" stroke="#93b4f0" stroke-width="1.8"/>
+<text x="940" y="241" text-anchor="middle" font-size="14" fill="#1f2937">Receive Access Code</text>
+<ellipse cx="940" cy="418" rx="135" ry="26" fill="#ffffff" stroke="#93b4f0" stroke-width="1.8"/>
+<text x="940" y="423" text-anchor="middle" font-size="14" fill="#1f2937">Add Fact</text>
+<ellipse cx="940" cy="482" rx="135" ry="26" fill="#ffffff" stroke="#93b4f0" stroke-width="1.8"/>
+<text x="940" y="487" text-anchor="middle" font-size="14" fill="#1f2937">Edit Fact</text>
+<ellipse cx="940" cy="546" rx="135" ry="26" fill="#ffffff" stroke="#93b4f0" stroke-width="1.8"/>
+<text x="940" y="551" text-anchor="middle" font-size="14" fill="#1f2937">Remove Fact</text>
+<ellipse cx="940" cy="810" rx="135" ry="26" fill="#ffffff" stroke="#86c99a" stroke-width="1.8"/>
+<text x="940" y="815" text-anchor="middle" font-size="14" fill="#1f2937">Paste Job Description</text>
+<ellipse cx="940" cy="874" rx="135" ry="26" fill="#ffffff" stroke="#86c99a" stroke-width="1.8"/>
+<text x="940" y="879" text-anchor="middle" font-size="14" fill="#1f2937">Run No-New-Facts Check</text>
+<ellipse cx="940" cy="938" rx="135" ry="26" fill="#ffffff" stroke="#86c99a" stroke-width="1.8"/>
+<text x="940" y="943" text-anchor="middle" font-size="14" fill="#1f2937">Review Check Results</text>
+<ellipse cx="940" cy="1002" rx="135" ry="26" fill="#ffffff" stroke="#86c99a" stroke-width="1.8"/>
+<text x="940" y="1007" text-anchor="middle" font-size="14" fill="#1f2937">Use Own-Wording Fallback</text>
+<ellipse cx="940" cy="1118" rx="135" ry="26" fill="#ffffff" stroke="#86c99a" stroke-width="1.8"/>
+<text x="940" y="1123" text-anchor="middle" font-size="14" fill="#1f2937">Re-check Draft at Save</text>
+<text x="940" y="1043" text-anchor="middle" font-size="12" font-style="italic" fill="#c2570c">only if the check fails twice or AI is unavailable</text>
+<g stroke="#1f2937" stroke-width="2" fill="none" stroke-linecap="round"><circle cx="110" cy="760" r="13" fill="#fff"/><line x1="110" y1="773" x2="110" y2="814"/><line x1="86" y1="786" x2="134" y2="786"/><line x1="110" y1="814" x2="90" y2="846"/><line x1="110" y1="814" x2="130" y2="846"/></g>
+<text x="110" y="868" text-anchor="middle" font-size="15" font-weight="700" fill="#1f2937">Candidate</text>
+<g stroke="#1f2937" stroke-width="2" fill="none" stroke-linecap="round"><circle cx="1330" cy="726" r="13" fill="#fff"/><line x1="1330" y1="739" x2="1330" y2="780"/><line x1="1306" y1="752" x2="1354" y2="752"/><line x1="1330" y1="780" x2="1310" y2="812"/><line x1="1330" y1="780" x2="1350" y2="812"/></g>
+<text x="1330" y="834" text-anchor="middle" font-size="15" font-weight="700" fill="#1f2937">AI Model Provider</text>
+<text x="1330" y="852" text-anchor="middle" font-size="12" fill="#6b7280">(secondary actor)</text>
+<rect x="1238" y="1308" width="176" height="124" rx="8" fill="#ffffff" stroke="#d1d5db"/>
+<text x="1250" y="1326" font-size="12" font-weight="700" fill="#4b5563">LEGEND</text>
+<line x1="1250" y1="1346" x2="1296" y2="1346" stroke="#1f2937" stroke-width="1.8"/><text x="1304" y="1350" font-size="12" fill="#1f2937">association</text>
+<line x1="1250" y1="1372" x2="1296" y2="1372" stroke="#2563eb" stroke-width="1.7" stroke-dasharray="7 5" marker-end="url(#aInc)"/><text x="1304" y="1376" font-size="12" fill="#1f2937">includes (always)</text>
+<line x1="1296" y1="1398" x2="1250" y2="1398" stroke="#c2570c" stroke-width="1.7" stroke-dasharray="7 5" marker-end="url(#aExt)"/><text x="1304" y="1402" font-size="12" fill="#1f2937">extends (optional)</text>
+</svg>

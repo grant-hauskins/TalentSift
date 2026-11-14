@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<uml:Model xmi:version="2.1" xmlns:xmi="http://schema.omg.org/spec/XMI/2.1" xmlns:uml="http://www.eclipse.org/uml2/5.0.0/UML" xmi:id="_model" name="TalentSift">
+  <packagedElement xmi:type="uml:Package" xmi:id="_pkg" name="Applicant Use Cases">
+    <packagedElement xmi:type="uml:Actor" xmi:id="_cand" name="Candidate"/>
+    <packagedElement xmi:type="uml:Actor" xmi:id="_ai" name="AI Model Provider"/>
+    <packagedElement xmi:type="uml:Class" xmi:id="_subject" name="TalentSift Candidate Portal">
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_consent" name="Read AI Notice and Give Consent" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_create" name="Create Profile" subject="_subject">
+        <include xmi:type="uml:Include" xmi:id="_inc_create_consent" name="include" addition="_consent"/>
+        <include xmi:type="uml:Include" xmi:id="_inc_create_code" name="include" addition="_code"/>
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_code" name="Receive Access Code" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_return" name="Return with Access Code" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_facts" name="Manage Core Facts" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_addf" name="Add Fact" subject="_subject">
+        <extend xmi:type="uml:Extend" xmi:id="_ext_facts_addf" name="extend" extendedCase="_facts">
+          <condition xmi:type="uml:Constraint" xmi:id="_cond_addf"><specification xmi:type="uml:OpaqueExpression" xmi:id="_spec_addf"><body>Candidate adds a fact</body></specification></condition>
+        </extend>
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_editf" name="Edit Fact" subject="_subject">
+        <extend xmi:type="uml:Extend" xmi:id="_ext_facts_editf" name="extend" extendedCase="_facts">
+          <condition xmi:type="uml:Constraint" xmi:id="_cond_editf"><specification xmi:type="uml:OpaqueExpression" xmi:id="_spec_editf"><body>Candidate edits a fact</body></specification></condition>
+        </extend>
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_remf" name="Remove Fact" subject="_subject">
+        <extend xmi:type="uml:Extend" xmi:id="_ext_facts_remf" name="extend" extendedCase="_facts">
+          <condition xmi:type="uml:Constraint" xmi:id="_cond_remf"><specification xmi:type="uml:OpaqueExpression" xmi:id="_spec_remf"><body>Candidate removes a fact</body></specification></condition>
+        </extend>
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_draft" name="Draft Resume for Role" subject="_subject">
+        <include xmi:type="uml:Include" xmi:id="_inc_draft_jd" name="include" addition="_jd"/>
+        <include xmi:type="uml:Include" xmi:id="_inc_draft_guard" name="include" addition="_guard"/>
+        <include xmi:type="uml:Include" xmi:id="_inc_draft_review" name="include" addition="_review"/>
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_jd" name="Paste Job Description" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_guard" name="Run No-New-Facts Check" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_fallback" name="Use Own-Wording Fallback" subject="_subject">
+        <extend xmi:type="uml:Extend" xmi:id="_ext_draft_fallback" name="extend" extendedCase="_draft">
+          <condition xmi:type="uml:Constraint" xmi:id="_cond_fallback"><specification xmi:type="uml:OpaqueExpression" xmi:id="_spec_fallback"><body>AI check fails twice or AI unavailable</body></specification></condition>
+        </extend>
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_review" name="Review Check Results" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_dl" name="Download Draft" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_approve" name="Approve and Save Version" subject="_subject">
+        <include xmi:type="uml:Include" xmi:id="_inc_approve_recheck" name="include" addition="_recheck"/>
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_recheck" name="Re-check Draft at Save" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_discard" name="Discard Draft" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_versions" name="View Saved Versions" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_compare" name="Compare Two Versions" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_dlv" name="Download Version" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_delv" name="Delete Version" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_close" name="Close Profile on Device" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_viewc" name="View Consent and Notice" subject="_subject">
+      </ownedUseCase>
+      <ownedUseCase xmi:type="uml:UseCase" xmi:id="_delall" name="Delete Profile and All Data" subject="_subject">
+      </ownedUseCase>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_create" memberEnd="_assoc_cand_create_a _assoc_cand_create_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_create_a" type="_cand" association="_assoc_cand_create"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_create_u" type="_create" association="_assoc_cand_create"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_return" memberEnd="_assoc_cand_return_a _assoc_cand_return_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_return_a" type="_cand" association="_assoc_cand_return"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_return_u" type="_return" association="_assoc_cand_return"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_facts" memberEnd="_assoc_cand_facts_a _assoc_cand_facts_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_facts_a" type="_cand" association="_assoc_cand_facts"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_facts_u" type="_facts" association="_assoc_cand_facts"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_draft" memberEnd="_assoc_cand_draft_a _assoc_cand_draft_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_draft_a" type="_cand" association="_assoc_cand_draft"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_draft_u" type="_draft" association="_assoc_cand_draft"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_approve" memberEnd="_assoc_cand_approve_a _assoc_cand_approve_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_approve_a" type="_cand" association="_assoc_cand_approve"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_approve_u" type="_approve" association="_assoc_cand_approve"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_discard" memberEnd="_assoc_cand_discard_a _assoc_cand_discard_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_discard_a" type="_cand" association="_assoc_cand_discard"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_discard_u" type="_discard" association="_assoc_cand_discard"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_dl" memberEnd="_assoc_cand_dl_a _assoc_cand_dl_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_dl_a" type="_cand" association="_assoc_cand_dl"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_dl_u" type="_dl" association="_assoc_cand_dl"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_review" memberEnd="_assoc_cand_review_a _assoc_cand_review_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_review_a" type="_cand" association="_assoc_cand_review"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_review_u" type="_review" association="_assoc_cand_review"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_versions" memberEnd="_assoc_cand_versions_a _assoc_cand_versions_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_versions_a" type="_cand" association="_assoc_cand_versions"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_versions_u" type="_versions" association="_assoc_cand_versions"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_compare" memberEnd="_assoc_cand_compare_a _assoc_cand_compare_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_compare_a" type="_cand" association="_assoc_cand_compare"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_compare_u" type="_compare" association="_assoc_cand_compare"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_dlv" memberEnd="_assoc_cand_dlv_a _assoc_cand_dlv_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_dlv_a" type="_cand" association="_assoc_cand_dlv"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_dlv_u" type="_dlv" association="_assoc_cand_dlv"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_delv" memberEnd="_assoc_cand_delv_a _assoc_cand_delv_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_delv_a" type="_cand" association="_assoc_cand_delv"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_delv_u" type="_delv" association="_assoc_cand_delv"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_close" memberEnd="_assoc_cand_close_a _assoc_cand_close_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_close_a" type="_cand" association="_assoc_cand_close"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_close_u" type="_close" association="_assoc_cand_close"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_viewc" memberEnd="_assoc_cand_viewc_a _assoc_cand_viewc_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_viewc_a" type="_cand" association="_assoc_cand_viewc"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_viewc_u" type="_viewc" association="_assoc_cand_viewc"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_cand_delall" memberEnd="_assoc_cand_delall_a _assoc_cand_delall_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_delall_a" type="_cand" association="_assoc_cand_delall"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_cand_delall_u" type="_delall" association="_assoc_cand_delall"/>
+    </packagedElement>
+    <packagedElement xmi:type="uml:Association" xmi:id="_assoc_ai_draft" memberEnd="_assoc_ai_draft_a _assoc_ai_draft_u">
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_ai_draft_a" type="_ai" association="_assoc_ai_draft"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="_assoc_ai_draft_u" type="_draft" association="_assoc_ai_draft"/>
+    </packagedElement>
+  </packagedElement>
+</uml:Model>
